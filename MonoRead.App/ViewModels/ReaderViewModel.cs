@@ -9,14 +9,18 @@ using System.Text;
 
 namespace MonoRead.App.ViewModels
 {
-    // 接收来自路由传参的 BookId
-    [QueryProperty(nameof(BookId), "BookId")]
+    // 【核心修复1】将映射目标改为下面新增的 BookIdString 属性
+    [QueryProperty(nameof(BookIdString), "BookId")]
     public partial class ReaderViewModel : ObservableObject
     {
         private readonly IBookRepository _bookRepository;
 
         [ObservableProperty]
         private Guid _bookId;
+
+        // 【核心修复2】新增一个 string 类型的属性专门用来接收路由传参
+        [ObservableProperty]
+        private string _bookIdString = string.Empty;
 
         [ObservableProperty]
         private Book? _currentBook;
@@ -37,7 +41,18 @@ namespace MonoRead.App.ViewModels
         {
             LoadBookDataAsync(value);
         }
-
+        // 【核心修复3】当接收到字符串类型的 BookId 时，安全地手动转换为 Guid
+        partial void OnBookIdStringChanged(string value)
+        {
+            if (Guid.TryParse(value, out Guid parsedId))
+            {
+                LoadBookDataAsync(parsedId);
+            }
+            else
+            {
+                PageContent = "书籍ID解析失败，请返回重试。";
+            }
+        }
         private async void LoadBookDataAsync(Guid bookId)
         {
             try
