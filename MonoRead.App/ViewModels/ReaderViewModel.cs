@@ -2,143 +2,189 @@
 using CommunityToolkit.Mvvm.Input;
 using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text;
 
-namespace MonoRead.App.ViewModels
+namespace MonoRead.App.ViewModels;
+
+[QueryProperty(nameof(BookIdString), "BookId")]
+public partial class ReaderViewModel : ObservableObject
 {
-    // 【核心修复1】将映射目标改为下面新增的 BookIdString 属性
-    [QueryProperty(nameof(BookIdString), "BookId")]
-    public partial class ReaderViewModel : ObservableObject
+    private readonly IBookRepository _bookRepository;
+    // 1. 在顶部加入一个 Loading 状态
+    [ObservableProperty]
+    private bool _isLoading;
+
+    [ObservableProperty]
+    private string _bookIdString = string.Empty;
+
+    [ObservableProperty]
+    private Book? _currentBook;
+
+    // 记录当前正在阅读的章节
+    [ObservableProperty]
+    private BookChapter? _currentChapter;
+
+    [ObservableProperty]
+    private string _chapterTitle = "加载中...";
+
+    [ObservableProperty]
+    private string _pageContent = "正在排版正文...";
+
+    // 控制“上一章/下一章”按钮是否可用
+    [ObservableProperty]
+    private bool _canGoPrevious;
+
+    [ObservableProperty]
+    private bool _canGoNext;
+
+    public ReaderViewModel(IBookRepository bookRepository)
     {
-        private readonly IBookRepository _bookRepository;
+        _bookRepository = bookRepository;
+    }
 
-        [ObservableProperty]
-        private Guid _bookId;
-
-        // 【核心修复2】新增一个 string 类型的属性专门用来接收路由传参
-        [ObservableProperty]
-        private string _bookIdString = string.Empty;
-
-        [ObservableProperty]
-        private Book? _currentBook;
-
-        [ObservableProperty]
-        private string _chapterTitle = "加载中...";
-
-        [ObservableProperty]
-        private string _pageContent = "正在排版正文...";
-
-        public ReaderViewModel(IBookRepository bookRepository)
+    partial void OnBookIdStringChanged(string value)
+    {
+        if (Guid.TryParse(value, out Guid parsedId))
         {
-            _bookRepository = bookRepository;
+            LoadBookDataAsync(parsedId);
         }
+    }
 
-        // 当 BookId 被路由赋值时，自动触发此方法
-        partial void OnBookIdChanged(Guid value)
+    private async void LoadBookDataAsync(Guid bookId)
+    {
+        try
         {
-            LoadBookDataAsync(value);
-        }
-        // 【核心修复3】当接收到字符串类型的 BookId 时，安全地手动转换为 Guid
-        partial void OnBookIdStringChanged(string value)
-        {
-            if (Guid.TryParse(value, out Guid parsedId))
+            CurrentBook = await _bookRepository.GetBookWithChaptersAsync(bookId);
+
+            if (CurrentBook != null && CurrentBook.Chapters.Any())
             {
-                LoadBookDataAsync(parsedId);
-            }
-            else
-            {
-                PageContent = "书籍ID解析失败，请返回重试。";
+                // TODO: 未来这里会从 CurrentBook.ProgressLocator 里读取上次看到哪一章，现在先默认第一章
+                var targetChapter = CurrentBook.Chapters.OrderBy(c => c.SortOrder).First();
+                await LoadChapterContentAsync(targetChapter);
             }
         }
-        private async void LoadBookDataAsync(Guid bookId)
+        catch (Exception ex)
         {
-            try
-            {
-                CurrentBook = await _bookRepository.GetBookWithChaptersAsync(bookId);
+            PageContent = $"加载失败: {ex.Message}";
+        }
+    }
 
-                if (CurrentBook != null && CurrentBook.Chapters.Any())
-                {
-                    // 获取第一章
-                    var firstChapter = CurrentBook.Chapters.OrderBy(c => c.SortOrder).First();
+    // 【升级版】流式读取引擎，同时更新按钮状态
+    // 2. 修改 LoadChapterContentAsync，加入防并发锁
+    // 【终极排版引擎】加入 Task.Run 线程隔离，彻底解放 UI 渲染！
+    private async Task LoadChapterContentAsync(BookChapter targetChapter)
+    {
+        if (IsLoading) return; // 防连点锁
+        IsLoading = true;
 
-                    // 开始硬核流式读取正文！
-                    await LoadChapterContentAsync(firstChapter);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"加载书籍失败: {ex.Message}");
-                PageContent = "书籍加载失败。";
-            }
+        if (CurrentBook == null)
+        {
+            IsLoading = false;
+            return;
         }
 
-        // 【核心算法】根据 JSON 索引，去硬盘里精准截断文本
-        private async Task LoadChapterContentAsync(BookChapter currentChapter)
+        try
         {
-            try
-            {
-                ChapterTitle = currentChapter.Title;
-                PageContent = "正在从硬盘深处挖掘正文...";
+            CurrentChapter = targetChapter;
+            ChapterTitle = targetChapter.Title;
+            // 告诉用户正在加载，此时 UI 瞬间响应
+            PageContent = "正在极速排版中，请稍候...";
 
-                // 1. 解析当前章节的起始字符索引
+            CanGoPrevious = CurrentBook.Chapters.Any(c => c.SortOrder < targetChapter.SortOrder);
+            CanGoNext = CurrentBook.Chapters.Any(c => c.SortOrder > targetChapter.SortOrder);
+
+            // 【核心绝杀】：用 Task.Run 开启一条后台专属通道，把成千上万次的循环计算全扔进去
+            string extractedContent = await Task.Run(async () =>
+            {
+                // 1. 解析起始索引
                 long startCharIndex = 0;
-                if (!string.IsNullOrWhiteSpace(currentChapter.StartLocator) && currentChapter.StartLocator != "{}")
+                if (!string.IsNullOrWhiteSpace(targetChapter.StartLocator) && targetChapter.StartLocator != "{}")
                 {
-                    using var doc = System.Text.Json.JsonDocument.Parse(currentChapter.StartLocator);
+                    using var doc = System.Text.Json.JsonDocument.Parse(targetChapter.StartLocator);
                     startCharIndex = doc.RootElement.GetProperty("position").GetInt64();
                 }
 
-                // 2. 找到下一章的位置，从而计算出本章到底有多少个字
-                var nextChapter = CurrentBook.Chapters.FirstOrDefault(c => c.SortOrder == currentChapter.SortOrder + 1);
-                long endCharIndex = long.MaxValue; // 默认读到文件末尾
+                // 2. 解析结束索引
+                var nextChapter = CurrentBook.Chapters.FirstOrDefault(c => c.SortOrder == targetChapter.SortOrder + 1);
+                long endCharIndex = long.MaxValue;
                 if (nextChapter != null && !string.IsNullOrWhiteSpace(nextChapter.StartLocator) && nextChapter.StartLocator != "{}")
                 {
                     using var doc = System.Text.Json.JsonDocument.Parse(nextChapter.StartLocator);
                     endCharIndex = doc.RootElement.GetProperty("position").GetInt64();
                 }
 
-                // 计算本章长度 (防止有些超大章节撑爆内存，强制限制单章最多加载 20000 字)
                 int lengthToRead = endCharIndex == long.MaxValue ? 20000 : (int)(endCharIndex - startCharIndex);
+                if (lengthToRead <= 0) return "（本章暂无正文内容）";
                 if (lengthToRead > 20000) lengthToRead = 20000;
 
-                // 3. 打开文件流 (防 OOM 绝杀)
                 using var reader = new StreamReader(CurrentBook.FilePath);
 
-                // 高速跳过前面的无关字符，直达本章起点
+                // 3. 高速跳跃（这里就算循环一万次，也绝对不会卡顿 UI）
                 if (startCharIndex > 0)
                 {
-                    char[] throwawayBuffer = new char[4096];
+                    char[] throwawayBuffer = new char[8192]; // 加大跳跃步长，提升一倍速度
                     long remainingToSkip = startCharIndex;
                     while (remainingToSkip > 0)
                     {
                         int toRead = (int)Math.Min(throwawayBuffer.Length, remainingToSkip);
                         int readCount = await reader.ReadAsync(throwawayBuffer, 0, toRead);
-                        if (readCount == 0) break; // 到底了
+                        if (readCount == 0) break;
                         remainingToSkip -= readCount;
                     }
                 }
 
-                // 4. 精准读取本章的正文字符！
+                // 4. 精准截取本章正文
                 char[] contentBuffer = new char[lengthToRead];
                 int charsRead = await reader.ReadAsync(contentBuffer, 0, lengthToRead);
+                return new string(contentBuffer, 0, charsRead);
+            });
 
-                // 将字符转化为字符串并渲染到 UI
-                PageContent = new string(contentBuffer, 0, charsRead);
-            }
-            catch (Exception ex)
+            // 拿到结果后，强制切回主线程去渲染界面
+            MainThread.BeginInvokeOnMainThread(() =>
             {
-                PageContent = $"解析正文失败：{ex.Message}\n请检查文件是否损坏。";
-            }
+                PageContent = string.IsNullOrWhiteSpace(extractedContent) ? "（解析内容为空）" : extractedContent;
+            });
         }
-
-        [RelayCommand]
-        private async Task GoBackAsync()
+        catch (Exception ex)
         {
-            // 退出阅读器，返回书架
-            await Shell.Current.GoToAsync("..");
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                PageContent = $"读取正文失败：\n{ex.Message}";
+            });
         }
+        finally
+        {
+            // 无论成功失败，必须解锁
+            IsLoading = false;
+        }
+    }
+
+    // 3. 在上一章和下一章命令前，也加上安全校验
+    [RelayCommand]
+    private async Task PreviousChapterAsync()
+    {
+        if (CurrentBook == null || CurrentChapter == null || IsLoading) return;
+        var prevChapter = CurrentBook.Chapters.Where(c => c.SortOrder < CurrentChapter.SortOrder).OrderByDescending(c => c.SortOrder).FirstOrDefault();
+        if (prevChapter != null)
+        {
+            await LoadChapterContentAsync(prevChapter);
+        }
+    }
+
+    [RelayCommand]
+    private async Task NextChapterAsync()
+    {
+        if (CurrentBook == null || CurrentChapter == null || IsLoading) return;
+        var nextChapter = CurrentBook.Chapters.Where(c => c.SortOrder > CurrentChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
+        if (nextChapter != null)
+        {
+            await LoadChapterContentAsync(nextChapter);
+        }
+    }
+
+    [RelayCommand]
+    private async Task GoBackAsync()
+    {
+        await Shell.Current.GoToAsync("..");
     }
 }

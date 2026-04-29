@@ -23,6 +23,17 @@ namespace MonoRead.UseCase
 
         public async Task<Book> ParseAndSplitBookAsync(string sandboxFilePath, string fileName, string fileHash)
         {
+            // 1. 【核心修复】：动态侦测文件的换行符长度，彻底消灭坐标漂移！
+            int newlineLength = 2; // 默认认定为 \r\n
+            using (var fs = new FileStream(sandboxFilePath, FileMode.Open, FileAccess.Read))
+            {
+                byte[] buffer = new byte[1024];
+                int bytesRead = fs.Read(buffer, 0, buffer.Length);
+                string snippet = System.Text.Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                if (snippet.Contains("\r\n")) newlineLength = 2;
+                else if (snippet.Contains("\n")) newlineLength = 1;
+            }
+
             var book = new Book
             {
                 Id = Guid.NewGuid(),
@@ -35,9 +46,8 @@ namespace MonoRead.UseCase
 
             var chapters = new List<BookChapter>();
             int sortOrder = 0;
-
-            long currentCharacterIndex = 0; // 记录当前游标在文件中的绝对字符位置
-            long chapterStartIndex = 0;     // 当前这一章的起始字符位置
+            long currentCharacterIndex = 0;
+            long chapterStartIndex = 0;
             string currentTitle = "前言";
 
             using (var reader = new StreamReader(sandboxFilePath))
@@ -47,27 +57,23 @@ namespace MonoRead.UseCase
                 {
                     if (!string.IsNullOrWhiteSpace(line) && ChapterRegex.IsMatch(line))
                     {
-                        // 发现新章节！将上一章（或前言）的目录和定位索引存入列表
                         chapters.Add(new BookChapter
                         {
                             Id = Guid.NewGuid(),
                             BookId = book.Id,
                             Title = currentTitle,
                             SortOrder = sortOrder++,
-                            // 核心：记录该章节在文件中的绝对索引
                             StartLocator = $"{{\"position\": {chapterStartIndex}}}"
                         });
 
-                        // 刷新当前章节数据
                         currentTitle = line.Trim();
                         chapterStartIndex = currentCharacterIndex;
                     }
 
-                    // 累加游标。因为 ReadLineAsync 会吞掉换行符，我们手动加上 \r\n 的长度(2)，以保证后期切片读取时游标精准
-                    currentCharacterIndex += line.Length + 2;
+                    // 【核心修复】：使用侦测到的精确换行符长度，一字不差！
+                    currentCharacterIndex += line.Length + newlineLength;
                 }
 
-                // EOF 结算：将最后一章压入
                 chapters.Add(new BookChapter
                 {
                     Id = Guid.NewGuid(),
@@ -78,9 +84,7 @@ namespace MonoRead.UseCase
                 });
             }
 
-            // 一次性无阻塞入库
             await _bookRepository.SaveBookWithChaptersAsync(book, chapters);
-
             return book;
         }
     }
