@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="MonoRead.App/MonoRead.App.csproj" />
+  <Project Path="MonoRead.Core/MonoRead.Core.csproj" />
+  <Project Path="MonoRead.Infrastructure/MonoRead.Infrastructure.csproj" />
+  <Project Path="MonoRead.Tests/MonoRead.Tests.vbproj" />
+  <Project Path="MonoRead.UseCase/MonoRead.UseCase.csproj" />
+</Solution>
