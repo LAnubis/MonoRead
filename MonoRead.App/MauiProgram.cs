@@ -38,10 +38,27 @@ namespace MonoRead.App
             // 注册视图模型和页面 (Transient 表示每次请求都创建新实例)
             builder.Services.AddTransient<ViewModels.LibraryViewModel>();
             builder.Services.AddTransient<Views.LibraryPage>();
+            builder.Services.AddTransient<ViewModels.ReaderViewModel>();
+            builder.Services.AddTransient<Views.ReaderPage>();
 
             builder.Services.AddScoped<IBookRepository, BookRepository>();
             builder.Services.AddScoped<IBookParsingUseCase, BookParsingUseCase>();
-            return builder.Build();
+
+
+            // 1. 先把 App 构建出来
+            var app = builder.Build();
+
+            // 2. 【核心修复】创建一个服务作用域，获取数据库上下文，并强制执行建表！
+            using (var scope = app.Services.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<MonoRead.Infrastructure.AppDbContext>();
+
+                // 这一句是魔法！它会检查底层 SQLite：如果没有 Books 等表，它会瞬间自动全部创建！
+                dbContext.Database.EnsureCreated();
+            }
+
+            // 3. 返回启动 App
+            return app;
         }
     }
 }

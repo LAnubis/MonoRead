@@ -1,8 +1,10 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
 
@@ -12,14 +14,52 @@ namespace MonoRead.App.ViewModels
     public partial class LibraryViewModel : ObservableObject
     {
         private readonly IFileSystemService _fileSystemService;
+        private readonly IBookParsingUseCase _bookParsingUseCase;
+        private readonly IBookRepository _bookRepository;
         // 构造函数注入我们刚刚写的服务
-        public LibraryViewModel(IFileSystemService fileSystemService)
+        // MVVM 核心：驱动界面列表的数据源，增删元素会自动触发 UI 刷新
+        [ObservableProperty]
+        private ObservableCollection<Book> _books = new();
+
+        public LibraryViewModel(
+            IFileSystemService fileSystemService,
+            IBookParsingUseCase bookParsingUseCase,
+            IBookRepository bookRepository)
         {
             _fileSystemService = fileSystemService;
+            _bookParsingUseCase = bookParsingUseCase;
+            _bookRepository = bookRepository;
+
+            // 视图模型被创建时，自动从 SQLite 加载已有书籍
+            LoadBooksCommand.Execute(null);
         }
 
+        // 加载书架数据的命令
+        [RelayCommand]
+        private async Task LoadBooksAsync()
+        {
+            try
+            {
+                // 1. 在后台线程去 SQLite 查数据，不卡顿
+                var bookList = await _bookRepository.GetAllBooksAsync();
 
+                // 2. 【核心修复】强制回到主线程更新 UI 绑定的集合！
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    Books.Clear();
+                    foreach (var book in bookList)
+                    {
+                        Books.Add(book);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"加载书架异常: {ex.Message}");
+            }
+        }
 
+        // 导入书籍的核心命令
         [RelayCommand]
         private async Task ImportBookAsync()
         {
@@ -32,33 +72,40 @@ namespace MonoRead.App.ViewModels
                 { DevicePlatform.MacCatalyst, new[] { "public.plain-text" } }
             });
 
-                // 1. 唤起选择器 (此时 App 安全挂起)
                 var result = await FilePicker.Default.PickAsync(new PickOptions
                 {
                     PickerTitle = "请选择要导入的小说 (TXT)",
                     FileTypes = customFileType
                 });
 
-                // 如果用户取消了选择，直接返回
                 if (result == null) return;
 
+                // 1. 索要安全流并拷贝到沙盒 (此时在后台线程，安全)
                 var newBookId = Guid.NewGuid();
-                string newFileName = $"{newBookId}{Path.GetExtension(result.FileName)}";
+                string fileName = result.FileName;
+                string newFileName = $"{newBookId}{Path.GetExtension(fileName)}";
 
-                // 2. 索要安全流并写入沙盒
                 using var stream = await result.OpenReadAsync();
                 string savedPath = await _fileSystemService.CopyFileToSandboxAsync(stream, newFileName);
+
+                // 2. 计算防重哈希
                 string fileHash = await _fileSystemService.CalculateFileHashAsync(savedPath);
 
-                // 3. 【绝杀修复】摒弃 BeginInvoke，使用当前窗口的安全调度器 (Dispatcher)
-                // 确保 UI 渲染资源已经彻底恢复后再弹窗，消灭 provider null 报错！
+                // 3. 呼叫百万字级核心解析引擎，执行切割与入库！
+                var parsedBook = await _bookParsingUseCase.ParseAndSplitBookAsync(savedPath, fileName, fileHash);
+
+                // 4. 【核心修复】解析完成后，强制回到主线程操作界面！
                 if (Application.Current?.MainPage != null)
                 {
                     await Application.Current.MainPage.Dispatcher.DispatchAsync(async () =>
                     {
+                        // 插入到界面列表的最前面，UI 瞬间响应
+                        Books.Insert(0, parsedBook);
+
+                        // 弹出成功提示
                         await Application.Current.MainPage.DisplayAlert(
                             "导入成功",
-                            $"文件已存入沙盒！\n哈希: {fileHash}",
+                            $"《{parsedBook.Title}》已成功加入书架并完成目录解析！",
                             "太棒了");
                     });
                 }
@@ -70,10 +117,27 @@ namespace MonoRead.App.ViewModels
                 {
                     await Application.Current.MainPage.Dispatcher.DispatchAsync(async () =>
                     {
-                        await Application.Current.MainPage.DisplayAlert("错误", $"读取文件失败：{ex.Message}", "确定");
+                        await Application.Current.MainPage.DisplayAlert("导入失败", ex.Message, "确定");
                     });
                 }
             }
+        }
+
+
+
+
+        // 当用户点击某本书时触发
+        [RelayCommand]
+        private async Task OpenBookAsync(Book selectedBook)
+        {
+            if (selectedBook == null) return;
+            // 【核心修复】使用路由字典传递强类型参数，完美解决 String 无法转 Guid 的问题
+            var navigationParameter = new Dictionary<string, object>
+        {
+            { "BookId", selectedBook.Id }
+        };
+            // 携带 BookId 路由跳转到阅读器页面
+            await Shell.Current.GoToAsync($"{nameof(Views.ReaderPage)}?BookId={selectedBook.Id}");
         }
     }
 }

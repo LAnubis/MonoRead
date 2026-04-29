@@ -9,5 +9,9 @@ namespace MonoRead.Core.Interfaces
     {
         // 一次性保存书籍和所有章节目录的原子操作
         Task SaveBookWithChaptersAsync(Book book, List<BookChapter> chapters);
+        // 新增：获取书架上的所有书
+        Task<List<Book>> GetAllBooksAsync();
+        // 新增：根据 ID 获取书籍及其关联的章节目录
+        Task<Book?> GetBookWithChaptersAsync(Guid bookId);
     }
 }

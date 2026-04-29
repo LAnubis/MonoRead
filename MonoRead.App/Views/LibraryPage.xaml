@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="MonoRead.App.Views.LibraryPage"
+             xmlns:viewmodels="clr-namespace:MonoRead.App.ViewModels"
              Shell.NavBarIsVisible="False">
     <Grid RowDefinitions="Auto, *">
 
@@ -20,27 +21,59 @@
                     CornerRadius="20" />
         </Grid>
 
-        <VerticalStackLayout Grid.Row="1" 
-                             VerticalOptions="Center" 
-                             HorizontalOptions="Center" 
-                             Spacing="16">
+        <CollectionView Grid.Row="1" 
+                        ItemsSource="{Binding Books}" 
+                        SelectionMode="None">
 
-            <Label Text="📚" 
-                   FontSize="72" 
-                   HorizontalOptions="Center" 
-                   Opacity="0.8"/>
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" 
+                                     HorizontalOptions="Center" 
+                                     Spacing="16">
+                    <Label Text="📚" FontSize="72" HorizontalOptions="Center" Opacity="0.8"/>
+                    <Label Text="你的书架空空如也" FontSize="16" TextColor="{StaticResource TextSecondary}" HorizontalOptions="Center" />
+                    <Label Text="点击右上角导入第一本本地小说吧" FontSize="14" TextColor="{StaticResource TextPlaceholder}" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
 
-            <Label Text="你的书架空空如也" 
-                   FontSize="16" 
-                   TextColor="{StaticResource TextSecondary}" 
-                   HorizontalOptions="Center" />
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Grid Padding="20,10" ColumnDefinitions="60, *">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer 
+            Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:LibraryViewModel}}, Path=OpenBookCommand}" 
+            CommandParameter="{Binding .}" />
+                        </Grid.GestureRecognizers>
+                        <Border Grid.Column="0" 
+                                HeightRequest="80" 
+                                WidthRequest="60" 
+                                BackgroundColor="{StaticResource BgLight}" 
+                                Stroke="{StaticResource TextPlaceholder}" 
+                                StrokeThickness="1" 
+                                StrokeShape="RoundRectangle 4">
+                            <Label Text="TXT" 
+                                   VerticalOptions="Center" 
+                                   HorizontalOptions="Center" 
+                                   TextColor="{StaticResource TextSecondary}" 
+                                   FontSize="12"/>
+                        </Border>
 
-            <Label Text="点击右上角导入第一本本地小说吧" 
-                   FontSize="14" 
-                   TextColor="{StaticResource TextPlaceholder}" 
-                   HorizontalOptions="Center" />
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Margin="15,0,0,0">
+                            <Label Text="{Binding Title}" 
+                                   FontSize="16" 
+                                   FontAttributes="Bold" 
+                                   TextColor="{StaticResource TextPrimary}" />
 
-        </VerticalStackLayout>
+                            <Label Text="已完美解析入库" 
+                                   FontSize="12" 
+                                   TextColor="{StaticResource MorandiBlue}" 
+                                   Margin="0,5,0,0" />
+                        </VerticalStackLayout>
+
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+        </CollectionView>
 
     </Grid>
 </ContentPage>

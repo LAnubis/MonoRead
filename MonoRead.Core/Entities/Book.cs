@@ -13,7 +13,8 @@ namespace MonoRead.Core.Entities
         public string? CoverImagePath { get; set; } // [V1 MVP 必做]
         public string FileHash { get; set; } = string.Empty; // SHA256 防重索引
         public string ProgressLocator { get; set; } = "{}"; // JSON 格式定位协议
-
+                                                            // 补全这两个缺失的属性
+        public DateTime ImportDate { get; set; }
         // 导航属性
         public virtual Folder? Folder { get; set; }
         public virtual ICollection<BookChapter> Chapters { get; set; } = new List<BookChapter>();
