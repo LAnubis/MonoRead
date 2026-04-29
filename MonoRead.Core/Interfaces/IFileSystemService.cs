@@ -12,8 +12,8 @@ namespace MonoRead.Core.Interfaces
         // 计算文件的 SHA256 防重哈希
         Task<string> CalculateFileHashAsync(string sourceFilePath);
 
-        // 将外部文件拷贝至沙盒，并重命名为 {Guid}.dat
-        Task<string> CopyFileToSandboxAsync(string sourceFilePath, Guid bookId);
+        // 【核心修改】不要传路径了，直接传文件流和目标文件名
+        Task<string> CopyFileToSandboxAsync(Stream sourceStream, string targetFileName);
 
         // 物理彻底删除沙盒中的文件
         void DeletePhysicalFile(string filePath);

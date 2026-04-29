@@ -22,14 +22,11 @@ namespace MonoRead.Infrastructure.Services
             return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
         }
 
-        public async Task<string> CopyFileToSandboxAsync(string sourceFilePath, Guid bookId)
+        // 【核心修改】直接读取安全的系统流并写入沙盒
+        public async Task<string> CopyFileToSandboxAsync(Stream sourceStream, string targetFileName)
         {
-            // 我们统一将导入的文件重命名为 "BookId.txt" 存入沙盒
-            string ext = Path.GetExtension(sourceFilePath);
-            string newFileName = $"{bookId}{ext}";
-            string targetPath = Path.Combine(GetSandboxDirectory(), newFileName);
+            string targetPath = Path.Combine(GetSandboxDirectory(), targetFileName);
 
-            using var sourceStream = File.OpenRead(sourceFilePath);
             using var targetStream = File.Create(targetPath);
             await sourceStream.CopyToAsync(targetStream);
 

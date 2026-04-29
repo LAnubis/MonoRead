@@ -49,6 +49,13 @@ namespace MonoRead.App
 
                 File.AppendAllText(logPath, logContent);
                 System.Diagnostics.Debug.WriteLine($"[CRASH SAVED]: {logPath}");
+
+                // ======= 核心排障：把报错直接怼到 VS 输出窗口 =======
+                System.Diagnostics.Debug.WriteLine("\n================ 🚨 致命崩溃拦截 🚨 ================");
+                System.Diagnostics.Debug.WriteLine($"[异常类型]: {type}");
+                System.Diagnostics.Debug.WriteLine($"[错误信息]: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[堆栈跟踪]: \n{ex.StackTrace}");
+                System.Diagnostics.Debug.WriteLine("======================================================\n");
             }
             catch
             {
