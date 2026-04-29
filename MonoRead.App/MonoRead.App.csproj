@@ -78,4 +78,10 @@
 	  <ProjectReference Include="..\MonoRead.UseCase\MonoRead.UseCase.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <MauiXaml Update="Views\LibraryPage.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	</ItemGroup>
+
 </Project>

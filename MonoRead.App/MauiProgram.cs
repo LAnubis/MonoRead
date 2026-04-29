@@ -33,6 +33,10 @@ namespace MonoRead.App
             // 注册应用层 UseCase (作用域生命周期，因为依赖 DbContext)
             // builder.Services.AddScoped<IArchiveBookUseCase, ArchiveBookUseCase>();
 
+            // 注册视图模型和页面 (Transient 表示每次请求都创建新实例)
+            builder.Services.AddTransient<ViewModels.LibraryViewModel>();
+            builder.Services.AddTransient<Views.LibraryPage>();
+
             return builder.Build();
         }
     }
