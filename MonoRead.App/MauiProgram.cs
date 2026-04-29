@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure;
 using MonoRead.Infrastructure.Services;
+using MonoRead.UseCase;
 namespace MonoRead.App
 {
     public static class MauiProgram
@@ -38,6 +39,8 @@ namespace MonoRead.App
             builder.Services.AddTransient<ViewModels.LibraryViewModel>();
             builder.Services.AddTransient<Views.LibraryPage>();
 
+            builder.Services.AddScoped<IBookRepository, BookRepository>();
+            builder.Services.AddScoped<IBookParsingUseCase, BookParsingUseCase>();
             return builder.Build();
         }
     }
