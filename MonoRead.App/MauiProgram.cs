@@ -1,7 +1,9 @@
 ﻿using CommunityToolkit.Maui; // 必须引用
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure;
+using MonoRead.Infrastructure.Services;
 namespace MonoRead.App
 {
     public static class MauiProgram
@@ -28,8 +30,7 @@ namespace MonoRead.App
                 options.UseSqlite($"Data Source={dbPath}");
             });
             // 注册基础设施服务 (单例，因为文件系统路径在 App 生命周期内不会变)
-            // builder.Services.AddSingleton<IFileSystemService, FileSystemService>();
-
+            builder.Services.AddSingleton<IFileSystemService, FileSystemService>();
             // 注册应用层 UseCase (作用域生命周期，因为依赖 DbContext)
             // builder.Services.AddScoped<IArchiveBookUseCase, ArchiveBookUseCase>();
 
