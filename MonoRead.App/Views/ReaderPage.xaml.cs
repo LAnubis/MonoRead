@@ -15,6 +15,10 @@ public partial class ReaderPage : ContentPage
             {
                 MainThread.BeginInvokeOnMainThread(async () =>
                 {
+                    // 【核心修复：防 Android 闪退锁】
+                    // 必须给 Android 原生 UI 引擎 100 毫秒的时间来完成文字高度的测量和渲染
+                    // 否则直接调用 ScrollToAsync 会导致底层引擎直接崩溃！
+                    await Task.Delay(100);
                     await ReaderScrollView.ScrollToAsync(0, 0, false);
                 });
             }
