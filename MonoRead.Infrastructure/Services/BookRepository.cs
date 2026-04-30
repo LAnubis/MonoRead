@@ -26,10 +26,17 @@ namespace MonoRead.Infrastructure.Services
         // 实现查询逻辑，按导入时间倒序排列
         public async Task<List<Book>> GetAllBooksAsync()
         {
+            //return await _dbContext.Books
+            //    .Where(b => !b.IsDeleted) // 过滤掉进入回收站的书
+            //    .OrderByDescending(b => b.ImportDate)
+            //    .ToListAsync();
+
             return await _dbContext.Books
-                .Where(b => !b.IsDeleted) // 过滤掉进入回收站的书
-                .OrderByDescending(b => b.ImportDate)
-                .ToListAsync();
+            .AsNoTracking() // 【核心修复】：彻底禁用 EF Core 的内存追踪，强制每次都从 SQLite 物理文件读取最新进度！
+            .Include(b => b.Chapters)
+            .Where(b => !b.IsDeleted)
+            .OrderByDescending(b => b.UpdatedAt) // 顺便利用上一节我们更新的 UpdatedAt，让最近阅读的书自动排在最前面
+            .ToListAsync();
         }
         // 实现根据 ID 贪婪加载章节
         public async Task<Book?> GetBookWithChaptersAsync(Guid bookId)
@@ -38,10 +45,17 @@ namespace MonoRead.Infrastructure.Services
                 .Include(b => b.Chapters) // 连带章节目录一起查出来
                 .FirstOrDefaultAsync(b => b.Id == bookId && !b.IsDeleted);
         }
-        public async Task UpdateBookAsync(Book book)
+       
+        public async Task UpdateBookProgressAsync(Guid bookId, string progressLocator)
         {
-            _dbContext.Books.Update(book);
-            await _dbContext.SaveChangesAsync();
+            // 【核心修复】：绕过复杂的实体图更新，只查出单条记录并局部更新，绝对不会破坏 Chapters 导航属性
+            var book = await _dbContext.Books.FirstOrDefaultAsync(b => b.Id == bookId);
+            if (book != null)
+            {
+                book.ProgressLocator = progressLocator;
+                book.UpdatedAt = DateTime.UtcNow; // 顺便刷新最后阅读时间
+                await _dbContext.SaveChangesAsync();
+            }
         }
     }
 }

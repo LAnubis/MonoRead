@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
+using System.Text.Json;
 
 namespace MonoRead.Core.Entities
 {
@@ -19,5 +21,38 @@ namespace MonoRead.Core.Entities
         public virtual Folder? Folder { get; set; }
         public virtual ICollection<BookChapter> Chapters { get; set; } = new List<BookChapter>();
         public virtual ICollection<HighlightNote> Notes { get; set; } = new List<HighlightNote>();
+
+        // 【核心新增】UI 绑定的进度字符串。由于加了 [NotMapped]，EF Core 会忽略它，不需要写迁移！
+        [NotMapped]
+        public string ProgressText
+        {
+            get
+            {
+                if (Chapters == null || !Chapters.Any()) return "未解析";
+
+                int total = Chapters.Count;
+                int current = 1; // 默认第一章
+
+                if (!string.IsNullOrWhiteSpace(ProgressLocator) && ProgressLocator != "{}")
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(ProgressLocator);
+                        if (doc.RootElement.TryGetProperty("chapterId", out var chapterIdElement))
+                        {
+                            var chapterId = chapterIdElement.GetGuid();
+                            var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
+                            if (chapter != null)
+                            {
+                                // 假设 SortOrder 是从 0 开始的，加 1 就是日常说的第几章
+                                current = chapter.SortOrder + 1;
+                            }
+                        }
+                    }
+                    catch { /* 解析失败则回退到第一章 */ }
+                }
+                return $"{current}章 / 共{total}章";
+            }
+        }
     }
 }

@@ -183,8 +183,10 @@ public partial class ReaderViewModel : ObservableObject
             });
 
             // 2. 【数据落盘】在主线程之外（后台异步线程）执行数据库 I/O，绝对不卡顿 UI
+            // 旧代码：await _bookRepository.UpdateBookAsync(CurrentBook);
+            // 【修改为】：
             CurrentBook.ProgressLocator = $"{{\"chapterId\": \"{targetChapter.Id}\"}}";
-            await _bookRepository.UpdateBookAsync(CurrentBook);
+            await _bookRepository.UpdateBookProgressAsync(CurrentBook.Id, CurrentBook.ProgressLocator);
         }
         catch (Exception ex)
         {

@@ -12,38 +12,40 @@
 
         <!-- ==================== 图层 1：底层 (正文区 + 常驻底部控制条) ==================== -->
         <Grid RowDefinitions="*, Auto">
+
             <!-- 1.1 正文滚动区 -->
-            <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never" Margin="20,40,20,0">
+            <ScrollView x:Name="ReaderScrollView" Grid.Row="0" VerticalScrollBarVisibility="Never" Margin="20,40,20,0">
+                <!-- 【核心修复】将点击唤出菜单的手势直接加在 ScrollView 上，既能点击，又绝对不会吞噬上下滑动手势！ -->
+                <ScrollView.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
+                </ScrollView.GestureRecognizers>
+
                 <Label Text="{Binding PageContent}" 
                        FontSize="{Binding ReaderFontSize}" 
                        LineHeight="1.8"
                        TextColor="{StaticResource TextPrimary}" />
             </ScrollView>
 
-            <!-- 1.2 高频操作区：常驻底部的章节穿梭栏 -->
+            <!-- 1.2 常驻底部的章节穿梭栏 -->
             <Grid Grid.Row="1" ColumnDefinitions="Auto, *, Auto" Margin="20,10,20,20">
+                <!-- 保持原样不变 -->
                 <Button Grid.Column="0" Text="上一章" Command="{Binding PreviousChapterCommand}" IsEnabled="{Binding CanGoPrevious}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,5"/>
                 <Label Grid.Column="1" Text="{Binding ChapterTitle}" FontSize="11" TextColor="{StaticResource TextPlaceholder}" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1"/>
                 <Button Grid.Column="2" Text="下一章" Command="{Binding NextChapterCommand}" IsEnabled="{Binding CanGoNext}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,5"/>
             </Grid>
         </Grid>
 
-        <!-- ==================== 图层 2：隐形手势层 ==================== -->
-        <!-- 左侧预留上一页，右侧预留下一页，中间点击唤出菜单 -->
-        <Grid ColumnDefinitions="1*, 2*, 1*" Margin="0,0,0,60">
-            <BoxView Grid.Column="0" Color="Transparent" />
-            <BoxView Grid.Column="1" Color="Transparent">
-                <BoxView.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
-                </BoxView.GestureRecognizers>
-            </BoxView>
-            <BoxView Grid.Column="2" Color="Transparent" />
-        </Grid>
+
 
         <!-- ==================== 图层 3：悬浮控制面板层 (点击中间唤出) ==================== -->
         <Grid RowDefinitions="Auto, *, Auto" IsVisible="{Binding IsMenuVisible}">
             <BoxView Grid.RowSpan="3" Color="#CC000000" Opacity="0.5" />
-
+            <!-- 【核心修复】：在中间行（第1行）单独放置一个彻底透明的捕捉器，绝不被干扰，点击立刻关闭菜单 -->
+            <BoxView Grid.Row="1" Color="Transparent">
+                <BoxView.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
+                </BoxView.GestureRecognizers>
+            </BoxView>
             <!-- 顶部栏 -->
             <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" BackgroundColor="#E61C1C1E" Padding="15,40,15,15">
                 <Button Grid.Column="0" Text="← 返回" Command="{Binding GoBackCommand}" BackgroundColor="Transparent" TextColor="White" />

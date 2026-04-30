@@ -14,6 +14,7 @@ namespace MonoRead.Core.Interfaces
         // 新增：根据 ID 获取书籍及其关联的章节目录
         Task<Book?> GetBookWithChaptersAsync(Guid bookId);
         // 【新增】更新单本书籍状态（用于保存阅读进度）
-        Task UpdateBookAsync(Book book);
+     
+        Task UpdateBookProgressAsync(Guid bookId, string progressLocator);
     }
 }
