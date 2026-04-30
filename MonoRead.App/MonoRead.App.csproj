@@ -47,6 +47,17 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 	</PropertyGroup>
 
+
+	<PropertyGroup Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' == 'net10.0-android'">
+		<!-- 开启 AOT 编译，提升启动速度 -->
+		<RunAOTCompilation>true</RunAOTCompilation>
+		<!-- 开启裁剪，减小包体积 -->
+		<PublishTrimmed>true</PublishTrimmed>
+		<!-- 确保 Source Generator 正常工作 -->
+		<InterproceduralOptimization>true</InterproceduralOptimization>
+	</PropertyGroup>
+	
+	
 	<ItemGroup>
 		<!-- App Icon -->
 		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />

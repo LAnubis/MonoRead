@@ -1,19 +1,27 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+	<TargetFrameworks>net10.0;net10.0-android</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+	  <!-- 关键修复：确保底层库不启用 MAUI UI 控件支持，避免引入 Android 资源依赖 -->
+	  <UseMaui>false</UseMaui>
+	 <UseMauiEssentials>true</UseMauiEssentials>
+	  <!-- 仅保留 Essentials 用于沙盒路径等功能 -->
+
+	  <!-- 启用 AOT 兼容性检查 -->
+	  <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Maui" Version="14.1.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Maui.Essentials" Version="10.0.60" />
   </ItemGroup>
 
   <ItemGroup>
