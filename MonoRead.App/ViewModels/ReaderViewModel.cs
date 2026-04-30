@@ -41,10 +41,6 @@ public partial class ReaderViewModel : ObservableObject
     [ObservableProperty]
     private bool _isMenuVisible = false;
 
-    // 【新增】阅读器字体大小，默认 18
-    [ObservableProperty]
-    private int _readerFontSize = 18;
-
     // 1. 用于绑定给 UI 目录的、严格排序的章节列表
     [ObservableProperty]
     private ObservableCollection<BookChapter> _chaptersList = new();
@@ -53,15 +49,22 @@ public partial class ReaderViewModel : ObservableObject
     [ObservableProperty]
     private bool _isTocVisible = false;
 
-    // 【新增：主题色绑定】
+
+
+    // 【核心修改：从持久化读取初始值，找不到则用默认值】
     [ObservableProperty]
-    private Color _pageBackgroundColor = Color.FromArgb("#FFFFFF"); // 默认日间白
+    private int _readerFontSize = Preferences.Default.Get("ReaderFontSize", 18);
 
     [ObservableProperty]
-    private Color _textPrimaryColor = Color.FromArgb("#333333");
+    private Color _pageBackgroundColor = Color.FromArgb(Preferences.Default.Get("ThemeBg", "#FFFFFF"));
 
     [ObservableProperty]
-    private Color _statusTextColor = Color.FromArgb("#888888"); // 底部进度条颜色
+    private Color _textPrimaryColor = Color.FromArgb(Preferences.Default.Get("ThemeText", "#333333"));
+
+    [ObservableProperty]
+    private Color _statusTextColor = Color.FromArgb(Preferences.Default.Get("ThemeStatus", "#888888"));
+
+
     public ReaderViewModel(IBookRepository bookRepository)
     {
         _bookRepository = bookRepository;
@@ -251,14 +254,22 @@ public partial class ReaderViewModel : ObservableObject
     [RelayCommand]
     private void IncreaseFont()
     {
-        if (ReaderFontSize < 36) ReaderFontSize += 2;
+        if (ReaderFontSize < 36)
+        {
+            ReaderFontSize += 2;
+            Preferences.Default.Set("ReaderFontSize", ReaderFontSize);
+        }
     }
 
     // 【新增】缩小字体
     [RelayCommand]
     private void DecreaseFont()
     {
-        if (ReaderFontSize > 12) ReaderFontSize -= 2;
+        if (ReaderFontSize > 12)
+        {
+            ReaderFontSize -= 2;
+            Preferences.Default.Set("ReaderFontSize", ReaderFontSize);
+        }
     }
     // 唤出或关闭目录面板
     [RelayCommand]
@@ -279,27 +290,41 @@ public partial class ReaderViewModel : ObservableObject
 
         await LoadChapterContentAsync(chapter); // 呼叫排版引擎读取该章
     }
-    // 【新增：切换主题命令】
+    // 【核心修复：切换主题时，同步写入 Preferences 持久化】
     [RelayCommand]
     private void ChangeTheme(string themeType)
     {
         switch (themeType)
         {
             case "Day":
-                PageBackgroundColor = Color.FromArgb("#FFFFFF");
-                TextPrimaryColor = Color.FromArgb("#333333");
-                StatusTextColor = Color.FromArgb("#888888");
+                UpdateTheme("#FFFFFF", "#333333", "#888888");
                 break;
             case "Night":
-                PageBackgroundColor = Color.FromArgb("#1A1A1C");
-                TextPrimaryColor = Color.FromArgb("#999999");
-                StatusTextColor = Color.FromArgb("#555555");
+                UpdateTheme("#1A1A1C", "#999999", "#555555");
                 break;
-            case "EyeCare": // 羊皮纸护眼色
-                PageBackgroundColor = Color.FromArgb("#F4ECD8");
-                TextPrimaryColor = Color.FromArgb("#3E3222");
-                StatusTextColor = Color.FromArgb("#8D7E68");
+            case "EyeCare":
+                UpdateTheme("#F4ECD8", "#3E3222", "#8D7E68");
                 break;
         }
+    }
+    private void UpdateTheme(string bgHex, string textHex, string statusHex)
+    {
+        PageBackgroundColor = Color.FromArgb(bgHex);
+        TextPrimaryColor = Color.FromArgb(textHex);
+        StatusTextColor = Color.FromArgb(statusHex);
+
+        // 写入沙盒配置
+        Preferences.Default.Set("ThemeBg", bgHex);
+        Preferences.Default.Set("ThemeText", textHex);
+        Preferences.Default.Set("ThemeStatus", statusHex);
+    }
+
+    // 【新增：独立修改文字颜色的命令】
+    [RelayCommand]
+    private void ChangeTextColor(string hexColor)
+    {
+        TextPrimaryColor = Color.FromArgb(hexColor);
+        // 同步写入沙盒偏好持久化
+        Microsoft.Maui.Storage.Preferences.Default.Set("ThemeText", hexColor);
     }
 }

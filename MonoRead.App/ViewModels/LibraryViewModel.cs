@@ -78,63 +78,53 @@ namespace MonoRead.App.ViewModels
         [RelayCommand]
         private async Task ImportBookAsync()
         {
+            if (IsBusy) return;
+
             try
             {
-                var customFileType = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
-            {
-                { DevicePlatform.Android, new[] { "text/plain" } },
-                { DevicePlatform.WinUI, new[] { ".txt" } },
-                { DevicePlatform.MacCatalyst, new[] { "public.plain-text" } }
-            });
-
+                // 1. 唤起系统原生文件选择器
                 var result = await FilePicker.Default.PickAsync(new PickOptions
                 {
-                    PickerTitle = "请选择要导入的小说 (TXT)",
-                    FileTypes = customFileType
+                    PickerTitle = "请选择TXT小说文件"
                 });
 
-                if (result == null) return;
-
-                // 1. 索要安全流并拷贝到沙盒 (此时在后台线程，安全)
-                var newBookId = Guid.NewGuid();
-                string fileName = result.FileName;
-                string newFileName = $"{newBookId}{Path.GetExtension(fileName)}";
-
-                using var stream = await result.OpenReadAsync();
-                string savedPath = await _fileSystemService.CopyFileToSandboxAsync(stream, newFileName);
-
-                // 2. 计算防重哈希
-                string fileHash = await _fileSystemService.CalculateFileHashAsync(savedPath);
-
-                // 3. 呼叫百万字级核心解析引擎，执行切割与入库！
-                var parsedBook = await _bookParsingUseCase.ParseAndSplitBookAsync(savedPath, fileName, fileHash);
-
-                // 4. 【核心修复】解析完成后，强制回到主线程操作界面！
-                if (Application.Current?.MainPage != null)
+                if (result != null)
                 {
-                    await Application.Current.MainPage.Dispatcher.DispatchAsync(async () =>
-                    {
-                        // 插入到界面列表的最前面，UI 瞬间响应
-                        Books.Insert(0, parsedBook);
+                    // 2. 拿到文件后，立刻开启 Loading 状态
+                    IsBusy = true;
+                    BusyMessage = "正在极速拆解小说章节，请稍候...";
 
-                        // 弹出成功提示
-                        await Application.Current.MainPage.DisplayAlert(
-                            "导入成功",
-                            $"《{parsedBook.Title}》已成功加入书架并完成目录解析！",
-                            "太棒了");
+                    // 【核心修复：强制让出主线程】给 MAUI 渲染引擎 50 毫秒的时间，把黑色的 Loading 遮罩画出来！
+                    await Task.Delay(50);
+
+                    // 【核心修复：绝对线程隔离】把 I/O 拷贝和正则解析踢入后台线程
+                    var parsedBook = await Task.Run(async () =>
+                    {
+                        // A. 将选中的文件流拷贝到沙盒
+                        using var stream = await result.OpenReadAsync();
+                        string newFileName = $"{Guid.NewGuid()}.dat";
+                        string sandboxPath = await _fileSystemService.CopyFileToSandboxAsync(stream, newFileName);
+
+                        // B. 执行哈希和百万字解析
+                        string fileHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
+                        return await _bookParsingUseCase.ParseAndSplitBookAsync(sandboxPath, result.FileName, fileHash);
+                    });
+
+                    // 3. 带着成果回到主线程更新 UI
+                    MainThread.BeginInvokeOnMainThread(async () =>
+                    {
+                        LoadBooksCommand.Execute(null); // 刷新书架
+                        await OpenBookAsync(parsedBook); // 自动打开阅读器
                     });
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"导入异常: {ex.Message}");
-                if (Application.Current?.MainPage != null)
-                {
-                    await Application.Current.MainPage.Dispatcher.DispatchAsync(async () =>
-                    {
-                        await Application.Current.MainPage.DisplayAlert("导入失败", ex.Message, "确定");
-                    });
-                }
+                MainThread.BeginInvokeOnMainThread(() => Application.Current.MainPage.DisplayAlert("导入失败", ex.Message, "确定"));
+            }
+            finally
+            {
+                IsBusy = false; // 无论成功失败，关闭 Loading
             }
         }
 
@@ -194,31 +184,35 @@ namespace MonoRead.App.ViewModels
             IsBusy = true;
             BusyMessage = "正在极速拆解小说章节，请稍候...";
 
-            // 【核心修复：防 UI 丢帧】强制延时 50ms，让 MAUI 渲染引擎有时间把 Loading 遮罩画出来，再去干苦力活！
+            // 强行让出主线程，确保 Loading 遮罩有足够的时间被渲染在屏幕上
             await Task.Delay(50);
 
             try
             {
-                // 文件已经在沙盒里了，直接算 Hash 并解析！
-                string fileHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
-                var parsedBook = await _bookParsingUseCase.ParseAndSplitBookAsync(sandboxPath, fileName, fileHash);
-
-                if (Application.Current?.MainPage != null)
+                // 【核心修复：绝对线程隔离】
+                // 将耗时的 Hash 计算和百兆级文本正则解析，彻彻底底扔进 Task.Run 后台线程
+                // 绝不允许它们占用一毫秒的 UI 线程，彻底消灭转圈卡死和 ANR 崩溃！
+                var parsedBook = await Task.Run(async () =>
                 {
-                    await Application.Current.MainPage.Dispatcher.DispatchAsync(async () =>
-                    {
-                        LoadBooksCommand.Execute(null); // 刷新书架
+                    string fileHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
+                    return await _bookParsingUseCase.ParseAndSplitBookAsync(sandboxPath, fileName, fileHash);
+                });
 
-                        // 【核心修复：需求1 - 导入后自动跳转阅读画面】
-                        await OpenBookAsync(parsedBook);
-                    });
-                }
+                // 苦力活干完，带着解析好的数据，安全回到主线程刷新界面
+                MainThread.BeginInvokeOnMainThread(async () =>
+                {
+                    LoadBooksCommand.Execute(null); // 刷新书架
+                    await OpenBookAsync(parsedBook); // 自动打开它
+                });
             }
             catch (Exception ex)
             {
-                // 如果解析失败，把刚才 Android 层临时拷贝的死文件删掉防垃圾
                 if (File.Exists(sandboxPath)) File.Delete(sandboxPath);
-                // 显示报错...
+                MainThread.BeginInvokeOnMainThread(() => Application.Current.MainPage.DisplayAlert("导入失败", ex.Message, "确定"));
+            }
+            finally
+            {
+                IsBusy = false;
             }
         }
 

@@ -39,7 +39,7 @@
 
 
         <!-- ==================== 图层 3：悬浮控制面板层 (点击中间唤出) ==================== -->
-        <Grid RowDefinitions="Auto, *, Auto" IsVisible="{Binding IsMenuVisible}">
+        <Grid RowDefinitions="Auto, *, Auto"  IsVisible="{Binding IsMenuVisible}"  BackgroundColor="Transparent">
             <!--<BoxView Grid.RowSpan="3" Color="#CC000000" Opacity="0.5" />-->
             <!-- 【核心修复】：在中间行（第1行）单独放置一个彻底透明的捕捉器，绝不被干扰，点击立刻关闭菜单 -->
             <BoxView Grid.Row="1" Color="Transparent">
@@ -86,6 +86,48 @@
                             <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
                         </BoxView.GestureRecognizers>
                     </BoxView>-->
+
+                    <BoxView HeightRequest="1" Color="#33FFFFFF" />
+
+                    <!-- 【新增：独立文字颜色调色板 (Color Swatches)】 -->
+                    <Grid ColumnDefinitions="Auto, *, *, *, *, *">
+                        <Label Grid.Column="0" Text="文字颜色" FontSize="14" TextColor="#888888" VerticalOptions="Center" Margin="0,0,15,0" />
+
+                        <!-- 黑色/深灰 -->
+                        <Border Grid.Column="1" BackgroundColor="#222222" Stroke="#555555" StrokeThickness="1" WidthRequest="36" HeightRequest="36" StrokeShape="RoundRectangle 18">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ChangeTextColorCommand}" CommandParameter="#222222" />
+                            </Border.GestureRecognizers>
+                        </Border>
+
+                        <!-- 深褐 (复古) -->
+                        <Border Grid.Column="2" BackgroundColor="#4E342E" Stroke="#555555" StrokeThickness="1" WidthRequest="36" HeightRequest="36" StrokeShape="RoundRectangle 18">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ChangeTextColorCommand}" CommandParameter="#4E342E" />
+                            </Border.GestureRecognizers>
+                        </Border>
+
+                        <!-- 灰色 -->
+                        <Border Grid.Column="3" BackgroundColor="#757575" Stroke="#555555" StrokeThickness="1" WidthRequest="36" HeightRequest="36" StrokeShape="RoundRectangle 18">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ChangeTextColorCommand}" CommandParameter="#757575" />
+                            </Border.GestureRecognizers>
+                        </Border>
+
+                        <!-- 浅灰/银 -->
+                        <Border Grid.Column="4" BackgroundColor="#BDBDBD" Stroke="#555555" StrokeThickness="1" WidthRequest="36" HeightRequest="36" StrokeShape="RoundRectangle 18">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ChangeTextColorCommand}" CommandParameter="#BDBDBD" />
+                            </Border.GestureRecognizers>
+                        </Border>
+
+                        <!-- 纯白 -->
+                        <Border Grid.Column="5" BackgroundColor="#FFFFFF" Stroke="#555555" StrokeThickness="1" WidthRequest="36" HeightRequest="36" StrokeShape="RoundRectangle 18">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ChangeTextColorCommand}" CommandParameter="#FFFFFF" />
+                            </Border.GestureRecognizers>
+                        </Border>
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
         </Grid>
