@@ -190,6 +190,13 @@ namespace MonoRead.App.ViewModels
         // 新的处理方法：
         private async Task ProcessImportedFileAsync(string sandboxPath, string fileName)
         {
+            if (IsBusy) return;
+            IsBusy = true;
+            BusyMessage = "正在极速拆解小说章节，请稍候...";
+
+            // 【核心修复：防 UI 丢帧】强制延时 50ms，让 MAUI 渲染引擎有时间把 Loading 遮罩画出来，再去干苦力活！
+            await Task.Delay(50);
+
             try
             {
                 // 文件已经在沙盒里了，直接算 Hash 并解析！

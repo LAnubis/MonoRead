@@ -20,10 +20,11 @@
                     <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
                 </ScrollView.GestureRecognizers>
 
-                <Label Text="{Binding PageContent}" 
+                <!--<Label Text="{Binding PageContent}" 
                        FontSize="{Binding ReaderFontSize}" 
                        LineHeight="1.8"
-                       TextColor="{StaticResource TextPrimary}" />
+                       TextColor="{StaticResource TextPrimary}" />-->
+                <Label Text="{Binding PageContent}" FontSize="{Binding ReaderFontSize}" LineHeight="1.8" TextColor="{Binding TextPrimaryColor}" />
             </ScrollView>
 
             <!-- 1.2 常驻底部的章节穿梭栏 -->
@@ -39,7 +40,7 @@
 
         <!-- ==================== 图层 3：悬浮控制面板层 (点击中间唤出) ==================== -->
         <Grid RowDefinitions="Auto, *, Auto" IsVisible="{Binding IsMenuVisible}">
-            <BoxView Grid.RowSpan="3" Color="#CC000000" Opacity="0.5" />
+            <!--<BoxView Grid.RowSpan="3" Color="#CC000000" Opacity="0.5" />-->
             <!-- 【核心修复】：在中间行（第1行）单独放置一个彻底透明的捕捉器，绝不被干扰，点击立刻关闭菜单 -->
             <BoxView Grid.Row="1" Color="Transparent">
                 <BoxView.GestureRecognizers>
@@ -60,13 +61,16 @@
                     <Grid ColumnDefinitions="Auto, *">
                         <Button Grid.Column="0" Text="三 目录" Command="{Binding ToggleTocCommand}" BackgroundColor="Transparent" TextColor="White" FontSize="16" />
                     </Grid>
+                    <BoxView HeightRequest="1" Color="#33FFFFFF" />
 
-                    <!-- 半透明黑色遮罩背景，点击此处可关闭菜单 -->
-                    <BoxView Grid.RowSpan="3" Color="#CC000000" Opacity="0.5">
-                        <BoxView.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
-                        </BoxView.GestureRecognizers>
-                    </BoxView>
+                    <!-- 【新增：主题切换区】 -->
+                    <Grid ColumnDefinitions="*, *, *">
+                        <Button Grid.Column="0" Text="日间" Command="{Binding ChangeThemeCommand}" CommandParameter="Day" BackgroundColor="#FFFFFF" TextColor="#333333" CornerRadius="20" Margin="5,0"/>
+                        <Button Grid.Column="1" Text="护眼" Command="{Binding ChangeThemeCommand}" CommandParameter="EyeCare" BackgroundColor="#F4ECD8" TextColor="#3E3222" CornerRadius="20" Margin="5,0"/>
+                        <Button Grid.Column="2" Text="夜间" Command="{Binding ChangeThemeCommand}" CommandParameter="Night" BackgroundColor="#1A1A1C" TextColor="#999999" CornerRadius="20" Margin="5,0"/>
+                    </Grid>
+
+                    <BoxView HeightRequest="1" Color="#33FFFFFF" />
 
                     <!-- 字体排版控制 -->
                     <Grid ColumnDefinitions="Auto, *, Auto, *, Auto">
@@ -76,6 +80,12 @@
                         <Button Grid.Column="3" Text="放大" Command="{Binding IncreaseFontCommand}" BackgroundColor="#33FFFFFF" TextColor="White" HeightRequest="40" CornerRadius="20" Margin="10,0"/>
                         <Label Grid.Column="4" Text="A+" FontSize="20" TextColor="White" VerticalOptions="Center" />
                     </Grid>
+                    <!-- 半透明黑色遮罩背景，点击此处可关闭菜单 -->
+                    <!--<BoxView Grid.RowSpan="3" Color="#CC000000" Opacity="0.5">
+                        <BoxView.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
+                        </BoxView.GestureRecognizers>
+                    </BoxView>-->
                 </VerticalStackLayout>
             </Border>
         </Grid>

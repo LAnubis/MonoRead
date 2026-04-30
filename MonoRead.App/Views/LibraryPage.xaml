@@ -4,6 +4,7 @@
              x:Class="MonoRead.App.Views.LibraryPage"
              xmlns:viewmodels="clr-namespace:MonoRead.App.ViewModels"
              Shell.NavBarIsVisible="False">
+    <Grid>
     <Grid RowDefinitions="Auto, *">
 
         <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="20,15,20,10">
@@ -21,62 +22,63 @@
                     CornerRadius="20" />
         </Grid>
 
-        <CollectionView Grid.Row="1" 
+            <CollectionView Grid.Row="1" 
                         ItemsSource="{Binding Books}" 
                         SelectionMode="None">
 
-            <CollectionView.EmptyView>
-                <VerticalStackLayout VerticalOptions="Center" 
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout VerticalOptions="Center" 
                                      HorizontalOptions="Center" 
                                      Spacing="16">
-                    <Label Text="📚" FontSize="72" HorizontalOptions="Center" Opacity="0.8"/>
-                    <Label Text="你的书架空空如也" FontSize="16" TextColor="{StaticResource TextSecondary}" HorizontalOptions="Center" />
-                    <Label Text="点击右上角导入第一本本地小说吧" FontSize="14" TextColor="{StaticResource TextPlaceholder}" HorizontalOptions="Center" />
-                </VerticalStackLayout>
-            </CollectionView.EmptyView>
+                        <Label Text="📚" FontSize="72" HorizontalOptions="Center" Opacity="0.8"/>
+                        <Label Text="你的书架空空如也" FontSize="16" TextColor="{StaticResource TextSecondary}" HorizontalOptions="Center" />
+                        <Label Text="点击右上角导入第一本本地小说吧" FontSize="14" TextColor="{StaticResource TextPlaceholder}" HorizontalOptions="Center" />
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
 
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
-                    <Grid Padding="20,10" ColumnDefinitions="60, *">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer 
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="20,10" ColumnDefinitions="60, *">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer 
             Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:LibraryViewModel}}, Path=OpenBookCommand}" 
             CommandParameter="{Binding .}" />
-                        </Grid.GestureRecognizers>
-                        <Border Grid.Column="0" 
+                            </Grid.GestureRecognizers>
+                            <Border Grid.Column="0" 
                                 HeightRequest="80" 
                                 WidthRequest="60" 
                                 BackgroundColor="{StaticResource BgLight}" 
                                 Stroke="{StaticResource TextPlaceholder}" 
                                 StrokeThickness="1" 
                                 StrokeShape="RoundRectangle 4">
-                            <Label Text="TXT" 
+                                <Label Text="TXT" 
                                    VerticalOptions="Center" 
                                    HorizontalOptions="Center" 
                                    TextColor="{StaticResource TextSecondary}" 
                                    FontSize="12"/>
-                        </Border>
+                            </Border>
 
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Margin="15,0,0,0">
-                            <Label Text="{Binding Title}" 
+                            <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Margin="15,0,0,0">
+                                <Label Text="{Binding Title}" 
                                    FontSize="16" 
                                    FontAttributes="Bold" 
                                    TextColor="{StaticResource TextPrimary}" />
-                            <!-- 【新增】绑定刚才写好的动态计算属性 -->
-                            <Label Text="{Binding ProgressText}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="0,5,0,0" />
-                            <!--<Label Text="已完美解析入库" 
+                                <!-- 【新增】绑定刚才写好的动态计算属性 -->
+                                <Label Text="{Binding ProgressText}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="0,5,0,0" />
+                                <!--<Label Text="已完美解析入库" 
                                    FontSize="12" 
                                    TextColor="{StaticResource MorandiBlue}" 
                                    Margin="0,5,0,0" />-->
-                        </VerticalStackLayout>
+                            </VerticalStackLayout>
 
-                    </Grid>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
 
-        </CollectionView>
-        <!-- 【核心新增：图层最顶端的全屏 Loading 遮罩】 -->
-        <Grid BackgroundColor="#B3000000" IsVisible="{Binding IsBusy}">
+            </CollectionView>
+        </Grid>
+        <!-- 【核心修复：绝对置顶的全屏遮罩】不需要指定 Row/Column，自然覆盖全屏，绝不撑开画面 -->
+        <Grid BackgroundColor="#CC000000" IsVisible="{Binding IsBusy}">
             <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="15">
                 <ActivityIndicator IsRunning="{Binding IsBusy}" Color="White" WidthRequest="50" HeightRequest="50" />
                 <Label Text="{Binding BusyMessage}" TextColor="White" FontSize="16" FontAttributes="Bold" HorizontalOptions="Center" />

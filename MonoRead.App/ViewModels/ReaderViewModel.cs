@@ -52,6 +52,16 @@ public partial class ReaderViewModel : ObservableObject
     // 2. 控制目录面板显隐的状态
     [ObservableProperty]
     private bool _isTocVisible = false;
+
+    // 【新增：主题色绑定】
+    [ObservableProperty]
+    private Color _pageBackgroundColor = Color.FromArgb("#FFFFFF"); // 默认日间白
+
+    [ObservableProperty]
+    private Color _textPrimaryColor = Color.FromArgb("#333333");
+
+    [ObservableProperty]
+    private Color _statusTextColor = Color.FromArgb("#888888"); // 底部进度条颜色
     public ReaderViewModel(IBookRepository bookRepository)
     {
         _bookRepository = bookRepository;
@@ -268,5 +278,28 @@ public partial class ReaderViewModel : ObservableObject
         IsMenuVisible = false; // 确保菜单也是关闭的
 
         await LoadChapterContentAsync(chapter); // 呼叫排版引擎读取该章
+    }
+    // 【新增：切换主题命令】
+    [RelayCommand]
+    private void ChangeTheme(string themeType)
+    {
+        switch (themeType)
+        {
+            case "Day":
+                PageBackgroundColor = Color.FromArgb("#FFFFFF");
+                TextPrimaryColor = Color.FromArgb("#333333");
+                StatusTextColor = Color.FromArgb("#888888");
+                break;
+            case "Night":
+                PageBackgroundColor = Color.FromArgb("#1A1A1C");
+                TextPrimaryColor = Color.FromArgb("#999999");
+                StatusTextColor = Color.FromArgb("#555555");
+                break;
+            case "EyeCare": // 羊皮纸护眼色
+                PageBackgroundColor = Color.FromArgb("#F4ECD8");
+                TextPrimaryColor = Color.FromArgb("#3E3222");
+                StatusTextColor = Color.FromArgb("#8D7E68");
+                break;
+        }
     }
 }
