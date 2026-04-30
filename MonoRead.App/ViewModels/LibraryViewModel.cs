@@ -4,11 +4,8 @@ using CommunityToolkit.Mvvm.Messaging;
 using MonoRead.App.Messages;
 using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
-using System;
-using System.Collections.Generic;
+using MonoRead.Infrastructure.Logging;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Text;
 
 namespace MonoRead.App.ViewModels
 {
@@ -45,6 +42,14 @@ namespace MonoRead.App.ViewModels
             // 在构造函数里：
             WeakReferenceMessenger.Default.Register<FileImportMessage>(this, async (r, m) =>
             {
+                // 消息总线一旦接管任务，立刻销毁静态兜底变量！
+                // 彻底防止稍后执行的 OnAppearing 再次“捡漏”引发二次导入。
+                if (App.PendingImportFilePath == m.SandboxPath)
+                {
+                    App.PendingImportFilePath = null;
+                    App.PendingImportFileName = null;
+                }
+
                 await ProcessImportedFileAsync(m.SandboxPath, m.FileName);
             });
         }
@@ -70,7 +75,7 @@ namespace MonoRead.App.ViewModels
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"加载书架异常: {ex.Message}");
+                LocalLogger.LogError($"加载书架异常: {ex.Message}");
             }
         }
 
@@ -145,12 +150,14 @@ namespace MonoRead.App.ViewModels
                 await Task.Delay(50);
 
                 // 严格使用字符串字典传参
-                var navParams = new Dictionary<string, object>
-            {
-                { "BookId", selectedBook.Id.ToString() }
-            };
+                //    var navParams = new Dictionary<string, object>
+                //{
+                //    { "BookId", selectedBook.Id.ToString() }
+                //};
 
-                await Shell.Current.GoToAsync(nameof(Views.ReaderPage), navParams);
+                //    await Shell.Current.GoToAsync(nameof(Views.ReaderPage), navParams);
+                string route = $"{nameof(Views.ReaderPage)}?BookId={selectedBook.Id}";
+                await Shell.Current.GoToAsync(route);
             }
             finally
             {
@@ -189,12 +196,28 @@ namespace MonoRead.App.ViewModels
 
             try
             {
-                // 【核心修复：绝对线程隔离】
-                // 将耗时的 Hash 计算和百兆级文本正则解析，彻彻底底扔进 Task.Run 后台线程
-                // 绝不允许它们占用一毫秒的 UI 线程，彻底消灭转圈卡死和 ANR 崩溃！
+                // 1. 先在主线程或轻量级后台计算出这个文件的身份证 (Hash)
+                string fileHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
+
+                // 【核心修复：业务层物理防重】
+                // 遍历当前内存书架（或查询数据库），看这本书是不是已经导入过了
+                var existingBook = Books.FirstOrDefault(b => b.FileHash == fileHash);
+                if (existingBook != null)
+                {
+                    // 发现重复书籍！直接清理掉刚才临时拷贝进来的废弃沙盒文件
+                    if (File.Exists(sandboxPath)) File.Delete(sandboxPath);
+
+                    // 中断导入，直接为用户打开这本已经存在的书
+                    MainThread.BeginInvokeOnMainThread(async () =>
+                    {
+                        await OpenBookAsync(existingBook);
+                    });
+                    return;
+                }
+
+                // 2. 如果是新书，则进入重度后台解析流程
                 var parsedBook = await Task.Run(async () =>
                 {
-                    string fileHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
                     return await _bookParsingUseCase.ParseAndSplitBookAsync(sandboxPath, fileName, fileHash);
                 });
 
@@ -208,11 +231,45 @@ namespace MonoRead.App.ViewModels
             catch (Exception ex)
             {
                 if (File.Exists(sandboxPath)) File.Delete(sandboxPath);
+                LocalLogger.LogError($"处理外部导入异常: {fileName}", ex);
                 MainThread.BeginInvokeOnMainThread(() => Application.Current.MainPage.DisplayAlert("导入失败", ex.Message, "确定"));
             }
             finally
             {
                 IsBusy = false;
+            }
+        }
+
+        // 【核心新增：提取本地日志的分享通道】
+        [RelayCommand]
+        private async Task ExportLogAsync()
+        {
+            try
+            {
+                // 获取今天的日志文件名
+                string fileName = $"monoread_{DateTime.Now:yyyyMMdd}.log";
+
+                // 组合出沙盒中的绝对路径
+                string filePath = System.IO.Path.Combine(LocalLogger.LogDirectory, fileName);
+
+                if (System.IO.File.Exists(filePath))
+                {
+                    // 呼叫系统原生分享面板
+                    await Share.Default.RequestAsync(new ShareFileRequest
+                    {
+                        Title = "导出 MonoRead 崩溃日志",
+                        File = new ShareFile(filePath)
+                    });
+                }
+                else
+                {
+                    await Application.Current.MainPage.DisplayAlert("提示", "今日尚无报错日志产生", "确定");
+                }
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"导出日志失败: {ex.Message}");
+                await Application.Current.MainPage.DisplayAlert("导出失败", ex.Message, "确定");
             }
         }
 

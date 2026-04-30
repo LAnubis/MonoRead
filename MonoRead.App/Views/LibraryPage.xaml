@@ -7,14 +7,22 @@
     <Grid>
     <Grid RowDefinitions="Auto, *">
 
-        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="20,15,20,10">
-            <Label Grid.Column="0" 
+            <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto" Padding="20,15,20,10">
+                <Label Grid.Column="0" 
                    Text="书架" 
                    FontSize="28" 
                    FontAttributes="Bold" 
                    VerticalOptions="Center" />
-
-            <Button Grid.Column="2" 
+                <!-- 【新增：日志导出按钮】作为次级按钮，使用透明背景避免喧宾夺主 -->
+                <Button Grid.Column="2" 
+                    Text="📝 日志" 
+                    Command="{Binding ExportLogCommand}"
+                   
+                    TextColor="{StaticResource TextSecondary}"
+                    FontSize="14"
+                    Padding="10,8"
+                    Margin="0,0,10,0" />
+                <Button Grid.Column="3" 
                     Text="+ 导入书籍" 
                     Style="{StaticResource PrimaryButton}" 
                     Command="{Binding ImportBookCommand}"

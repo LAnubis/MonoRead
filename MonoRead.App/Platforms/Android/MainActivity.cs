@@ -4,6 +4,7 @@ using Android.Content.PM;
 using Android.OS;
 using CommunityToolkit.Mvvm.Messaging;
 using MonoRead.App.Messages;
+using MonoRead.Infrastructure.Logging;
 using System.Diagnostics;
 
 namespace MonoRead.App
@@ -99,7 +100,7 @@ namespace MonoRead.App
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"导入异常: {ex.Message}");
+                    LocalLogger.LogError($"导入异常: {ex.Message}");
                 }
             });
         }

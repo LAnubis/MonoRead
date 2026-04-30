@@ -2,8 +2,8 @@
 using CommunityToolkit.Mvvm.Input;
 using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
+using MonoRead.Infrastructure.Logging;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 
 namespace MonoRead.App.ViewModels;
 
@@ -107,7 +107,7 @@ public partial class ReaderViewModel : ObservableObject
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"进度解析异常: {ex.Message}");
+                        LocalLogger.LogError($"进度解析异常: {ex.Message}");
                     }
                 }
                 await LoadChapterContentAsync(targetChapter);

@@ -49,11 +49,15 @@
 
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' == 'net10.0-android'">
-		<!-- 开启 AOT 编译，提升启动速度 -->
-		<RunAOTCompilation>true</RunAOTCompilation>
-		<!-- 开启裁剪，减小包体积 -->
-		<PublishTrimmed>true</PublishTrimmed>
-		<!-- 确保 Source Generator 正常工作 -->
+		<!-- 1. 【核心修复】：关闭代码裁剪。这会使 APK 体积变大（多出约 10-15MB），但能彻底解决反射被删导致的闪退 -->
+		<PublishTrimmed>false</PublishTrimmed>
+
+		<!-- 2. 关闭 AOT 编译（如果之前开启了的话，先关闭以排除 AOT 兼容性问题） -->
+		<RunAOTCompilation>false</RunAOTCompilation>
+
+		<!-- 3. 强制指定打包包含 ARM64 架构（目前市面上 99% 的真机都是 arm64-v8a） -->
+		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+		
 		<InterproceduralOptimization>true</InterproceduralOptimization>
 	</PropertyGroup>
 	

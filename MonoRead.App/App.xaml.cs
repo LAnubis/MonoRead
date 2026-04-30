@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MonoRead.Infrastructure;
+using MonoRead.Infrastructure.Logging;
 
 namespace MonoRead.App
 {
@@ -15,10 +16,26 @@ namespace MonoRead.App
         {
             InitializeComponent();
 
-
             // ======= 1.4 核心逻辑：注册全局异常兜底 =======
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+
+
+            // 【核心新增：全局异常拦截网】
+            // 捕获所有没被 try-catch 拦截的致命异常，写入本地文件！
+            AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
+            {
+                if (args.ExceptionObject is Exception ex)
+                {
+                    LocalLogger.LogError("发生了导致崩溃的全局未处理异常", ex);
+                }
+            };
+
+            TaskScheduler.UnobservedTaskException += (sender, args) =>
+            {
+                LocalLogger.LogError("发生了后台 Task 未观察到的异常", args.Exception);
+                args.SetObserved(); // 标记为已观察，防止 App 直接闪退
+            };
             // 保持你项目默认的 MainPage 赋值（通常是 AppShell 或 MainPage）
             //MainPage = new AppShell();
         }
@@ -52,14 +69,14 @@ namespace MonoRead.App
                 string logContent = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{type}]\n{ex.Message}\n{ex.StackTrace}\n\n";
 
                 File.AppendAllText(logPath, logContent);
-                System.Diagnostics.Debug.WriteLine($"[CRASH SAVED]: {logPath}");
+                LocalLogger.LogError($"[CRASH SAVED]: {logPath}");
 
                 // ======= 核心排障：把报错直接怼到 VS 输出窗口 =======
-                System.Diagnostics.Debug.WriteLine("\n================ 🚨 致命崩溃拦截 🚨 ================");
-                System.Diagnostics.Debug.WriteLine($"[异常类型]: {type}");
-                System.Diagnostics.Debug.WriteLine($"[错误信息]: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"[堆栈跟踪]: \n{ex.StackTrace}");
-                System.Diagnostics.Debug.WriteLine("======================================================\n");
+                LocalLogger.LogError("\n================ 🚨 致命崩溃拦截 🚨 ================");
+                LocalLogger.LogError($"[异常类型]: {type}");
+                LocalLogger.LogError($"[错误信息]: {ex.Message}");
+                LocalLogger.LogError($"[堆栈跟踪]: \n{ex.StackTrace}");
+                LocalLogger.LogError("======================================================\n");
             }
             catch
             {
@@ -91,11 +108,11 @@ namespace MonoRead.App
                     }
 
                     // 成功的话在控制台输出
-                    System.Diagnostics.Debug.WriteLine("====== 数据库沙盒初始化成功 ======");
+                    LocalLogger.LogError("====== 数据库沙盒初始化成功 ======");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"====== 数据库初始化失败: {ex.Message} ======");
+                    LocalLogger.LogError($"====== 数据库初始化失败: {ex.Message} ======");
                 }
             });
         }

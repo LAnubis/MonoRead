@@ -1,4 +1,5 @@
 using MonoRead.App.ViewModels;
+using MonoRead.Infrastructure.Logging;
 
 namespace MonoRead.App.Views;
 
@@ -15,11 +16,19 @@ public partial class ReaderPage : ContentPage
             {
                 MainThread.BeginInvokeOnMainThread(async () =>
                 {
-                    // 【核心修复：防 Android 闪退锁】
-                    // 必须给 Android 原生 UI 引擎 100 毫秒的时间来完成文字高度的测量和渲染
-                    // 否则直接调用 ScrollToAsync 会导致底层引擎直接崩溃！
-                    await Task.Delay(100);
-                    await ReaderScrollView.ScrollToAsync(0, 0, false);
+                    try
+                    {
+                        // 稍微加长一点等待时间，给低端真机喘息的机会
+                        await Task.Delay(150);
+                        await ReaderScrollView.ScrollToAsync(0, 0, false);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 【核心防御：生吞原生异常】
+                        // 如果 Android 原生引擎还没准备好导致滚动报错，直接生吞，只打日志。
+                        // 宁可用户手动滑一下回到顶部，也绝对不能让 App 闪退！
+                        LocalLogger.LogError($"[严重警告] ScrollToAsync 被系统拒绝: {ex.Message}");
+                    }
                 });
             }
         };
