@@ -1,64 +1,113 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:MonoRead.App.ViewModels"
              x:Class="MonoRead.App.Views.ReaderPage"
              Shell.NavBarIsVisible="False"
              Shell.TabBarIsVisible="False"
              BackgroundColor="{StaticResource BgLight}">
-    <Grid RowDefinitions="Auto, *, Auto" Padding="20,40,20,20">
 
-        <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Margin="0,0,0,20">
-            <Button Grid.Column="0" 
-                    Text="←" 
-                    Command="{Binding GoBackCommand}"
-                    FontSize="18"
-                    Padding="0"
-                    WidthRequest="40"
-                    TextColor="{StaticResource TextSecondary}" />
+    <!-- 最外层绝对布局，利用 Grid 不定义行列的特性，实现 Z 轴堆叠 -->
+    <Grid>
 
-            <Label Grid.Column="1" 
-                   Text="{Binding ChapterTitle}" 
-                   FontSize="12" 
-                   TextColor="{StaticResource TextSecondary}" 
-                   VerticalOptions="Center" 
-                   HorizontalOptions="End"/>
+        <!-- ==================== 图层 1：底层 (正文区 + 常驻底部控制条) ==================== -->
+        <Grid RowDefinitions="*, Auto">
+            <!-- 1.1 正文滚动区 -->
+            <ScrollView Grid.Row="0" VerticalScrollBarVisibility="Never" Margin="20,40,20,0">
+                <Label Text="{Binding PageContent}" 
+                       FontSize="{Binding ReaderFontSize}" 
+                       LineHeight="1.8"
+                       TextColor="{StaticResource TextPrimary}" />
+            </ScrollView>
+
+            <!-- 1.2 高频操作区：常驻底部的章节穿梭栏 -->
+            <Grid Grid.Row="1" ColumnDefinitions="Auto, *, Auto" Margin="20,10,20,20">
+                <Button Grid.Column="0" Text="上一章" Command="{Binding PreviousChapterCommand}" IsEnabled="{Binding CanGoPrevious}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,5"/>
+                <Label Grid.Column="1" Text="{Binding ChapterTitle}" FontSize="11" TextColor="{StaticResource TextPlaceholder}" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1"/>
+                <Button Grid.Column="2" Text="下一章" Command="{Binding NextChapterCommand}" IsEnabled="{Binding CanGoNext}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,5"/>
+            </Grid>
         </Grid>
 
-        <ScrollView Grid.Row="1" VerticalScrollBarVisibility="Never">
-            <Label Text="{Binding PageContent}" 
-                   FontSize="18" 
-                   LineHeight="1.8"
-                   TextColor="{StaticResource TextPrimary}" />
-        </ScrollView>
+        <!-- ==================== 图层 2：隐形手势层 ==================== -->
+        <!-- 左侧预留上一页，右侧预留下一页，中间点击唤出菜单 -->
+        <Grid ColumnDefinitions="1*, 2*, 1*" Margin="0,0,0,60">
+            <BoxView Grid.Column="0" Color="Transparent" />
+            <BoxView Grid.Column="1" Color="Transparent">
+                <BoxView.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
+                </BoxView.GestureRecognizers>
+            </BoxView>
+            <BoxView Grid.Column="2" Color="Transparent" />
+        </Grid>
 
-        <Grid Grid.Row="2" ColumnDefinitions="Auto, *, Auto" Margin="0,15,0,0">
+        <!-- ==================== 图层 3：悬浮控制面板层 (点击中间唤出) ==================== -->
+        <Grid RowDefinitions="Auto, *, Auto" IsVisible="{Binding IsMenuVisible}">
+            <BoxView Grid.RowSpan="3" Color="#CC000000" Opacity="0.5" />
 
-            <Button Grid.Column="0" 
-                    Text="上一章" 
-                    Command="{Binding PreviousChapterCommand}"
-                    IsEnabled="{Binding CanGoPrevious}"
-                    BackgroundColor="Transparent"
-                    TextColor="{StaticResource MorandiBlue}"
-                    FontSize="14"
-                    Padding="10,5"/>
+            <!-- 顶部栏 -->
+            <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" BackgroundColor="#E61C1C1E" Padding="15,40,15,15">
+                <Button Grid.Column="0" Text="← 返回" Command="{Binding GoBackCommand}" BackgroundColor="Transparent" TextColor="White" />
+                <Label Grid.Column="1" Text="设置" FontSize="16" TextColor="White" HorizontalOptions="Center" VerticalOptions="Center" />
+            </Grid>
 
-            <Label Grid.Column="1" 
-                   Text="{Binding ChapterTitle}" 
-                   FontSize="10" 
-                   TextColor="{StaticResource TextPlaceholder}" 
-                   HorizontalOptions="Center" 
-                   VerticalOptions="Center"
-                   LineBreakMode="TailTruncation"
-                   MaxLines="1"/>
+            <!-- 底部设置面板 -->
+            <Border Grid.Row="2" BackgroundColor="#E61C1C1E" Padding="20" StrokeShape="RoundRectangle 20,20,0,0">
+                <VerticalStackLayout Spacing="25">
 
-            <Button Grid.Column="2" 
-                    Text="下一章" 
-                    Command="{Binding NextChapterCommand}"
-                    IsEnabled="{Binding CanGoNext}"
-                    BackgroundColor="Transparent"
-                    TextColor="{StaticResource MorandiBlue}"
-                    FontSize="14"
-                    Padding="10,5"/>
+                    <!-- 【新增】左下角唤出目录面板的按钮 -->
+                    <Grid ColumnDefinitions="Auto, *">
+                        <Button Grid.Column="0" Text="三 目录" Command="{Binding ToggleTocCommand}" BackgroundColor="Transparent" TextColor="White" FontSize="16" />
+                    </Grid>
+
+                    <!-- 半透明黑色遮罩背景，点击此处可关闭菜单 -->
+                    <BoxView Grid.RowSpan="3" Color="#CC000000" Opacity="0.5">
+                        <BoxView.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
+                        </BoxView.GestureRecognizers>
+                    </BoxView>
+
+                    <!-- 字体排版控制 -->
+                    <Grid ColumnDefinitions="Auto, *, Auto, *, Auto">
+                        <Label Grid.Column="0" Text="A-" FontSize="16" TextColor="White" VerticalOptions="Center" />
+                        <Button Grid.Column="1" Text="缩小" Command="{Binding DecreaseFontCommand}" BackgroundColor="#33FFFFFF" TextColor="White" HeightRequest="40" CornerRadius="20" Margin="10,0"/>
+                        <Label Grid.Column="2" Text="{Binding ReaderFontSize}" TextColor="#888888" VerticalOptions="Center" HorizontalOptions="Center"/>
+                        <Button Grid.Column="3" Text="放大" Command="{Binding IncreaseFontCommand}" BackgroundColor="#33FFFFFF" TextColor="White" HeightRequest="40" CornerRadius="20" Margin="10,0"/>
+                        <Label Grid.Column="4" Text="A+" FontSize="20" TextColor="White" VerticalOptions="Center" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- ==================== 图层 4：全屏目录面板 (TOC) ==================== -->
+        <Grid RowDefinitions="Auto, *" IsVisible="{Binding IsTocVisible}" BackgroundColor="{StaticResource BgLight}">
+
+            <!-- 目录顶部栏 -->
+            <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Padding="20,40,20,15" BackgroundColor="{StaticResource BgLight}">
+                <Label Grid.Column="0" Text="目录" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
+                <Button Grid.Column="1" Text="关闭" Command="{Binding ToggleTocCommand}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" />
+            </Grid>
+
+            <BoxView Grid.Row="0" HeightRequest="1" Color="{StaticResource BorderLight}" VerticalOptions="End" />
+
+            <!-- 目录列表渲染 (强制使用虚拟化视图防卡顿) -->
+            <CollectionView Grid.Row="1" ItemsSource="{Binding ChaptersList}" SelectionMode="None">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="20,15">
+                            <Grid.GestureRecognizers>
+                                <!-- 点击具体章节，触发跳转命令 -->
+                                <TapGestureRecognizer 
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:ReaderViewModel}}, Path=SelectChapterCommand}" 
+                                    CommandParameter="{Binding .}" />
+                            </Grid.GestureRecognizers>
+
+                            <Label Text="{Binding Title}" FontSize="16" TextColor="{StaticResource TextPrimary}" LineBreakMode="TailTruncation" MaxLines="1" />
+                            <BoxView HeightRequest="1" Color="{StaticResource BorderLight}" VerticalOptions="End" Margin="0,15,-20,-15" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
         </Grid>
 
     </Grid>

@@ -11,9 +11,9 @@ namespace MonoRead.UseCase
     {
         private readonly IBookRepository _bookRepository;
 
-        // 匹配主流网络小说章节名
+        // 【架构强化】：严格的正则屏障。限定标题长度，防止将正文中的对话误判为章节。
         private static readonly Regex ChapterRegex = new Regex(
-            @"^\s*第[零一二三四五六七八九十百千万\d]+[章回节卷集幕计].*",
+            @"^\s*(.*?\s+)?(第[零一二三四五六七八九十百千万0-9]+[章回节卷集幕计]|[\d]+[\.\s])[^\n]{0,40}$",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         public BookParsingUseCase(IBookRepository bookRepository)
@@ -23,17 +23,6 @@ namespace MonoRead.UseCase
 
         public async Task<Book> ParseAndSplitBookAsync(string sandboxFilePath, string fileName, string fileHash)
         {
-            // 1. 【核心修复】：动态侦测文件的换行符长度，彻底消灭坐标漂移！
-            int newlineLength = 2; // 默认认定为 \r\n
-            using (var fs = new FileStream(sandboxFilePath, FileMode.Open, FileAccess.Read))
-            {
-                byte[] buffer = new byte[1024];
-                int bytesRead = fs.Read(buffer, 0, buffer.Length);
-                string snippet = System.Text.Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                if (snippet.Contains("\r\n")) newlineLength = 2;
-                else if (snippet.Contains("\n")) newlineLength = 1;
-            }
-
             var book = new Book
             {
                 Id = Guid.NewGuid(),
@@ -46,34 +35,65 @@ namespace MonoRead.UseCase
 
             var chapters = new List<BookChapter>();
             int sortOrder = 0;
-            long currentCharacterIndex = 0;
-            long chapterStartIndex = 0;
+
+            // 【核心修复】：三个绝对游标，彻底消灭 ReadLine 带来的位置漂移
+            long absoluteCharIndex = 0;     // 全局绝对字符计数器
+            long currentLineStartIndex = 0; // 当前正在读取的这一行的起始游标
+            long chapterStartIndex = 0;     // 章节起始游标
+
             string currentTitle = "前言";
+            var lineBuilder = new System.Text.StringBuilder();
 
-            using (var reader = new StreamReader(sandboxFilePath))
+            // 使用 StreamReader 直接读取 char[]，精准掌握每一个字符
+            using (var reader = new StreamReader(sandboxFilePath, System.Text.Encoding.UTF8))
             {
-                string? line;
-                while ((line = await reader.ReadLineAsync()) != null)
+                char[] buffer = new char[8192];
+                int charsRead;
+
+                while ((charsRead = await reader.ReadAsync(buffer, 0, buffer.Length)) > 0)
                 {
-                    if (!string.IsNullOrWhiteSpace(line) && ChapterRegex.IsMatch(line))
+                    for (int i = 0; i < charsRead; i++)
                     {
-                        chapters.Add(new BookChapter
+                        char c = buffer[i];
+
+                        // 遇到换行，说明一行拼接完毕，进行业务判定
+                        if (c == '\n')
                         {
-                            Id = Guid.NewGuid(),
-                            BookId = book.Id,
-                            Title = currentTitle,
-                            SortOrder = sortOrder++,
-                            StartLocator = $"{{\"position\": {chapterStartIndex}}}"
-                        });
+                            string line = lineBuilder.ToString();
+                            lineBuilder.Clear();
 
-                        currentTitle = line.Trim();
-                        chapterStartIndex = currentCharacterIndex;
+                            // 防伪判定：短于40字符，且符合正则，才被承认为真实章节
+                            if (line.Length < 40 && ChapterRegex.IsMatch(line))
+                            {
+                                chapters.Add(new BookChapter
+                                {
+                                    Id = Guid.NewGuid(),
+                                    BookId = book.Id,
+                                    Title = currentTitle,
+                                    SortOrder = sortOrder++,
+                                    StartLocator = $"{{\"position\": {chapterStartIndex}}}"
+                                });
+
+                                currentTitle = line.Trim();
+                                // 新章节的起始位置 = 当前被确认为章节标题的这一行的起点
+                                chapterStartIndex = currentLineStartIndex;
+                            }
+
+                            // \n 之后的下一个字符，就是新的一行的起点
+                            currentLineStartIndex = absoluteCharIndex + 1;
+                        }
+                        else if (c != '\r')
+                        {
+                            // 剔除 \r 的干扰，只将有效文字放入检测器
+                            lineBuilder.Append(c);
+                        }
+
+                        // 【灵魂逻辑】：无论是不是 \r 或 \n，只要流里过了一个字符，绝对游标必须 +1
+                        absoluteCharIndex++;
                     }
-
-                    // 【核心修复】：使用侦测到的精确换行符长度，一字不差！
-                    currentCharacterIndex += line.Length + newlineLength;
                 }
 
+                // EOF 结算：将最后一章压入
                 chapters.Add(new BookChapter
                 {
                     Id = Guid.NewGuid(),

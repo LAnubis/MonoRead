@@ -38,5 +38,10 @@ namespace MonoRead.Infrastructure.Services
                 .Include(b => b.Chapters) // 连带章节目录一起查出来
                 .FirstOrDefaultAsync(b => b.Id == bookId && !b.IsDeleted);
         }
+        public async Task UpdateBookAsync(Book book)
+        {
+            _dbContext.Books.Update(book);
+            await _dbContext.SaveChangesAsync();
+        }
     }
 }

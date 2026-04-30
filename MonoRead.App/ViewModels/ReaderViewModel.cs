@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 
 namespace MonoRead.App.ViewModels;
@@ -36,7 +37,21 @@ public partial class ReaderViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _canGoNext;
+    // 【新增】菜单是否可见的状态
+    [ObservableProperty]
+    private bool _isMenuVisible = false;
 
+    // 【新增】阅读器字体大小，默认 18
+    [ObservableProperty]
+    private int _readerFontSize = 18;
+
+    // 1. 用于绑定给 UI 目录的、严格排序的章节列表
+    [ObservableProperty]
+    private ObservableCollection<BookChapter> _chaptersList = new();
+
+    // 2. 控制目录面板显隐的状态
+    [ObservableProperty]
+    private bool _isTocVisible = false;
     public ReaderViewModel(IBookRepository bookRepository)
     {
         _bookRepository = bookRepository;
@@ -58,8 +73,30 @@ public partial class ReaderViewModel : ObservableObject
 
             if (CurrentBook != null && CurrentBook.Chapters.Any())
             {
-                // TODO: 未来这里会从 CurrentBook.ProgressLocator 里读取上次看到哪一章，现在先默认第一章
-                var targetChapter = CurrentBook.Chapters.OrderBy(c => c.SortOrder).First();
+                // 【核心新增】：提取严格按 SortOrder 排序的章节，供目录界面绑定
+                var sortedChapters = CurrentBook.Chapters.OrderBy(c => c.SortOrder).ToList();
+                ChaptersList = new ObservableCollection<BookChapter>(sortedChapters);
+
+                // 【核心修复：任务 3.3 进度读取】侦测 SQLite 中是否存有上次阅读的章节索引
+                var targetChapter = sortedChapters.First(); // 默认第一章
+
+                if (!string.IsNullOrWhiteSpace(CurrentBook.ProgressLocator) && CurrentBook.ProgressLocator != "{}")
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(CurrentBook.ProgressLocator);
+                        if (doc.RootElement.TryGetProperty("chapterId", out var chapterIdElement))
+                        {
+                            var savedChapterId = chapterIdElement.GetGuid();
+                            var savedChapter = sortedChapters.FirstOrDefault(c => c.Id == savedChapterId);
+                            if (savedChapter != null) targetChapter = savedChapter;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"进度解析异常: {ex.Message}");
+                    }
+                }
                 await LoadChapterContentAsync(targetChapter);
             }
         }
@@ -139,11 +176,15 @@ public partial class ReaderViewModel : ObservableObject
                 return new string(contentBuffer, 0, charsRead);
             });
 
-            // 拿到结果后，强制切回主线程去渲染界面
+            // 1. 【UI 刷新】仅将渲染界面的操作丢给主线程，瞬间完成
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 PageContent = string.IsNullOrWhiteSpace(extractedContent) ? "（解析内容为空）" : extractedContent;
             });
+
+            // 2. 【数据落盘】在主线程之外（后台异步线程）执行数据库 I/O，绝对不卡顿 UI
+            CurrentBook.ProgressLocator = $"{{\"chapterId\": \"{targetChapter.Id}\"}}";
+            await _bookRepository.UpdateBookAsync(CurrentBook);
         }
         catch (Exception ex)
         {
@@ -186,5 +227,44 @@ public partial class ReaderViewModel : ObservableObject
     private async Task GoBackAsync()
     {
         await Shell.Current.GoToAsync("..");
+    }
+    // 【新增】点击屏幕中间触发菜单显隐
+    [RelayCommand]
+    private void ToggleMenu()
+    {
+        IsMenuVisible = !IsMenuVisible;
+    }
+
+    // 【新增】放大字体
+    [RelayCommand]
+    private void IncreaseFont()
+    {
+        if (ReaderFontSize < 36) ReaderFontSize += 2;
+    }
+
+    // 【新增】缩小字体
+    [RelayCommand]
+    private void DecreaseFont()
+    {
+        if (ReaderFontSize > 12) ReaderFontSize -= 2;
+    }
+    // 唤出或关闭目录面板
+    [RelayCommand]
+    private void ToggleToc()
+    {
+        IsTocVisible = !IsTocVisible;
+        if (IsTocVisible) IsMenuVisible = false; // 打开目录时，自动隐藏底部控制栏
+    }
+
+    // 用户在目录中点击了某个具体章节
+    [RelayCommand]
+    private async Task SelectChapterAsync(BookChapter chapter)
+    {
+        if (chapter == null) return;
+
+        IsTocVisible = false; // 关闭目录面板
+        IsMenuVisible = false; // 确保菜单也是关闭的
+
+        await LoadChapterContentAsync(chapter); // 呼叫排版引擎读取该章
     }
 }
