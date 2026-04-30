@@ -69,6 +69,17 @@ namespace MonoRead.App
                         }
                         stream.Dispose();
 
+                        // 【核心修改：双重保险投递】
+                        // 1. 存入静态变量（针对冷启动，ViewModel 自己会来取）
+                        App.PendingImportFilePath = sandboxPath;
+                        App.PendingImportFileName = fileName;
+
+                        // 2. 发送消息（针对热启动，App 在后台存活时）
+                        WeakReferenceMessenger.Default.Send(new Messages.FileImportMessage(sandboxPath, fileName));
+
+
+
+
                         // 3. 等待 MAUI 界面准备就绪
                         while (Microsoft.Maui.Controls.Application.Current?.MainPage == null)
                         {

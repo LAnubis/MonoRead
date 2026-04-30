@@ -75,6 +75,12 @@
             </CollectionView.ItemTemplate>
 
         </CollectionView>
-
+        <!-- 【核心新增：图层最顶端的全屏 Loading 遮罩】 -->
+        <Grid BackgroundColor="#B3000000" IsVisible="{Binding IsBusy}">
+            <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="15">
+                <ActivityIndicator IsRunning="{Binding IsBusy}" Color="White" WidthRequest="50" HeightRequest="50" />
+                <Label Text="{Binding BusyMessage}" TextColor="White" FontSize="16" FontAttributes="Bold" HorizontalOptions="Center" />
+            </VerticalStackLayout>
+        </Grid>
     </Grid>
 </ContentPage>

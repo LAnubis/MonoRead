@@ -6,6 +6,10 @@ namespace MonoRead.App
 {
     public partial class App : Application
     {
+        // 【核心新增：冷启动文件引流管】
+        public static string? PendingImportFilePath { get; set; }
+        public static string? PendingImportFileName { get; set; }
+
         private readonly IServiceProvider _serviceProvider;
         public App()
         {

@@ -22,6 +22,12 @@ namespace MonoRead.App.ViewModels
         // MVVM 核心：驱动界面列表的数据源，增删元素会自动触发 UI 刷新
         [ObservableProperty]
         private ObservableCollection<Book> _books = new();
+        // 【新增 1：Loading 状态机】
+        [ObservableProperty]
+        private bool _isBusy;
+
+        [ObservableProperty]
+        private string _busyMessage = "正在处理...";
 
         public LibraryViewModel(
             IFileSystemService fileSystemService,
@@ -139,63 +145,47 @@ namespace MonoRead.App.ViewModels
         [RelayCommand]
         private async Task OpenBookAsync(Book selectedBook)
         {
-            if (selectedBook == null) return;
-            // 【核心修复】使用路由字典传递强类型参数，完美解决 String 无法转 Guid 的问题
-            var navigationParameter = new Dictionary<string, object>
-        {
-            { "BookId", selectedBook.Id }
-        };
-            // 携带 BookId 路由跳转到阅读器页面
-            await Shell.Current.GoToAsync($"{nameof(Views.ReaderPage)}?BookId={selectedBook.Id}");
-        }
+            if (selectedBook == null || IsBusy) return;
 
-        // 【核心新增：处理外部传入的数据流】
-        private async Task ProcessImportedStreamAsync(Stream stream, string fileName)
-        {
+            IsBusy = true; // 锁定，防止疯狂连点
             try
             {
-                var newBookId = Guid.NewGuid();
-                string newFileName = $"{newBookId}.dat"; // 强制重命名，隔离外部名
+                // 【灵魂一击】：强制等待 50 毫秒！
+                // 让 Android 底层的 CollectionView 水波纹动画和手势结算完毕，再执行页面路由，彻底消灭底层崩溃！
+                await Task.Delay(50);
 
-                // 1. 拷贝到私有沙盒 (消耗流)
-                string savedPath = await _fileSystemService.CopyFileToSandboxAsync(stream, newFileName);
-
-                // 2. 计算防重哈希
-                string fileHash = await _fileSystemService.CalculateFileHashAsync(savedPath);
-
-                // 3. 呼叫百万字级核心解析引擎
-                var parsedBook = await _bookParsingUseCase.ParseAndSplitBookAsync(savedPath, fileName, fileHash);
-
-                // 4. 强制回到主线程操作界面
-                if (Application.Current?.MainPage != null)
-                {
-                    await Application.Current.MainPage.Dispatcher.DispatchAsync(async () =>
-                    {
-                        Books.Insert(0, parsedBook);
-                        await Application.Current.MainPage.DisplayAlert(
-                            "导入成功",
-                            $"《{parsedBook.Title}》已成功加入书架！",
-                            "开始阅读");
-                    });
-                }
-            }
-            catch (Exception ex)
+                // 严格使用字符串字典传参
+                var navParams = new Dictionary<string, object>
             {
-                Debug.WriteLine($"处理外部流异常: {ex.Message}");
-                if (Application.Current?.MainPage != null)
-                {
-                    await Application.Current.MainPage.Dispatcher.DispatchAsync(async () =>
-                    {
-                        await Application.Current.MainPage.DisplayAlert("导入失败", ex.Message, "确定");
-                    });
-                }
+                { "BookId", selectedBook.Id.ToString() }
+            };
+
+                await Shell.Current.GoToAsync(nameof(Views.ReaderPage), navParams);
             }
             finally
             {
-                // 确保释放底层 Android 的流
-                stream?.Dispose();
+                IsBusy = false; // 解锁
             }
         }
+
+
+        // 【新增 2：主动检查冷启动文件的命令】
+        [RelayCommand]
+        private async Task CheckPendingImportAsync()
+        {
+            if (!string.IsNullOrEmpty(App.PendingImportFilePath))
+            {
+                string path = App.PendingImportFilePath;
+                string name = App.PendingImportFileName ?? "未知文档";
+
+                // 清空静态变量，防止重复导入
+                App.PendingImportFilePath = null;
+                App.PendingImportFileName = null;
+
+                await ProcessImportedFileAsync(path, name);
+            }
+        }
+     
 
         // 新的处理方法：
         private async Task ProcessImportedFileAsync(string sandboxPath, string fileName)
@@ -211,7 +201,9 @@ namespace MonoRead.App.ViewModels
                     await Application.Current.MainPage.Dispatcher.DispatchAsync(async () =>
                     {
                         LoadBooksCommand.Execute(null); // 刷新书架
-                        await Application.Current.MainPage.DisplayAlert("导入成功", $"《{parsedBook.Title}》已成功加入书架！", "开始阅读");
+
+                        // 【核心修复：需求1 - 导入后自动跳转阅读画面】
+                        await OpenBookAsync(parsedBook);
                     });
                 }
             }
