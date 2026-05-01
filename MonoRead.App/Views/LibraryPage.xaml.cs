@@ -30,7 +30,9 @@ public partial class LibraryPage : ContentPage
         if (BindingContext is LibraryViewModel vm)
         {
             // 触发 ViewModel 中的数据重新加载
-            vm.LoadBooksCommand.Execute(null);
+           // vm.LoadBooksCommand.Execute(null);
+            vm.LoadItemsCommand.Execute(null);
+            
             // 【核心新增】：每次页面展示时，检查是否有从外部扔进来的文件
             vm.CheckPendingImportCommand.Execute(null);
         }

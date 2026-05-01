@@ -16,5 +16,11 @@ namespace MonoRead.Core.Interfaces
         // 【新增】更新单本书籍状态（用于保存阅读进度）
      
         Task UpdateBookProgressAsync(Guid bookId, string progressLocator);
+
+        // 【核心新增：实体更新契约】
+        Task UpdateAsync(Book book);
+
+        // 顺便预留硬删除接口（以备彻底清空回收站时使用）
+        Task DeleteAsync(Book book);
     }
 }

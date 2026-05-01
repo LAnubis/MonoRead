@@ -1,28 +1,52 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace MonoRead.Core.Entities
 {
-    // MonoRead.Core/Entities/Book.cs
-    public class Book : BaseEntity
+    // 继承 BaseEntity，并实现 INotifyPropertyChanged 驱动 UI 刷新
+    public class Book : BaseEntity, INotifyPropertyChanged
     {
         public Guid? FolderId { get; set; }
         public string Title { get; set; } = string.Empty;
-        public string FilePath { get; set; } = string.Empty; // App 私有沙盒路径
-        public string? CoverImagePath { get; set; } // [V1 MVP 必做]
-        public string FileHash { get; set; } = string.Empty; // SHA256 防重索引
-        public string ProgressLocator { get; set; } = "{}"; // JSON 格式定位协议
-                                                            // 补全这两个缺失的属性
+        public string FilePath { get; set; } = string.Empty;
+        public string? CoverImagePath { get; set; }
+        public string FileHash { get; set; } = string.Empty;
+        public string ProgressLocator { get; set; } = "{}";
         public DateTime ImportDate { get; set; }
-        // 导航属性
+
         public virtual Folder? Folder { get; set; }
         public virtual ICollection<BookChapter> Chapters { get; set; } = new List<BookChapter>();
         public virtual ICollection<HighlightNote> Notes { get; set; } = new List<HighlightNote>();
 
-        // 【核心新增】UI 绑定的进度字符串。由于加了 [NotMapped]，EF Core 会忽略它，不需要写迁移！
+        // ================= UI 状态 (不映射到数据库) =================
+        private bool _isSelected;
+
+        [NotMapped]
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                if (_isSelected != value)
+                {
+                    _isSelected = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        // ================= 动态进度文本 =================
         [NotMapped]
         public string ProgressText
         {
@@ -31,7 +55,7 @@ namespace MonoRead.Core.Entities
                 if (Chapters == null || !Chapters.Any()) return "未解析";
 
                 int total = Chapters.Count;
-                int current = 1; // 默认第一章
+                int current = 1;
 
                 if (!string.IsNullOrWhiteSpace(ProgressLocator) && ProgressLocator != "{}")
                 {
@@ -44,7 +68,6 @@ namespace MonoRead.Core.Entities
                             var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
                             if (chapter != null)
                             {
-                                // 假设 SortOrder 是从 0 开始的，加 1 就是日常说的第几章
                                 current = chapter.SortOrder + 1;
                             }
                         }

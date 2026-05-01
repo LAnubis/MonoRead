@@ -43,7 +43,8 @@ namespace MonoRead.App
 
             builder.Services.AddScoped<IBookRepository, BookRepository>();
             builder.Services.AddScoped<IBookParsingUseCase, BookParsingUseCase>();
-
+            // 在 MauiProgram.cs 的 services 注册区域加上这行：
+            builder.Services.AddScoped<IFolderRepository, FolderRepository>();
 
             // 1. 先把 App 构建出来
             var app = builder.Build();

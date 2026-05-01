@@ -1,91 +1,112 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="MonoRead.App.Views.LibraryPage"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              xmlns:viewmodels="clr-namespace:MonoRead.App.ViewModels"
-             Shell.NavBarIsVisible="False">
+             x:Class="MonoRead.App.Views.LibraryPage"
+             Shell.NavBarIsVisible="False"
+             x:Name="RootPage">
+
+    <ContentPage.Resources>
+        <toolkit:InvertedBoolConverter x:Key="InvertedBoolConverter" />
+    </ContentPage.Resources>
+
     <Grid>
-    <Grid RowDefinitions="Auto, *">
+        <Grid RowDefinitions="Auto, *, Auto">
 
-            <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto" Padding="20,15,20,10">
-                <Label Grid.Column="0" 
-                   Text="书架" 
-                   FontSize="28" 
-                   FontAttributes="Bold" 
-                   VerticalOptions="Center" />
-                <!-- 【新增：日志导出按钮】作为次级按钮，使用透明背景避免喧宾夺主 -->
-                <Button Grid.Column="2" 
-                    Text="📝 日志" 
-                    Command="{Binding ExportLogCommand}"
-                   
-                    TextColor="{StaticResource TextSecondary}"
-                    FontSize="14"
-                    Padding="10,8"
-                    Margin="0,0,10,0" />
-                <Button Grid.Column="3" 
-                    Text="+ 导入书籍" 
-                    Style="{StaticResource PrimaryButton}" 
-                    Command="{Binding ImportBookCommand}"
-                    Padding="16,8" 
-                    CornerRadius="20" />
-        </Grid>
+            <!-- ================= 顶部导航栏 ================= -->
+            <Grid Grid.Row="0" ColumnDefinitions="*, Auto, Auto, Auto, Auto" Padding="20,15,20,10">
 
-            <CollectionView Grid.Row="1" 
-                        ItemsSource="{Binding Books}" 
-                        SelectionMode="None">
+                <HorizontalStackLayout Grid.Column="0" VerticalOptions="Center" Spacing="10">
+                    <Button Text="⬅" 
+                            IsVisible="{Binding IsNotRoot}" 
+                            Command="{Binding GoBackCommand}" 
+                            BackgroundColor="Transparent" 
+                            TextColor="{StaticResource TextPrimary}" 
+                            FontSize="24" 
+                            Padding="0" 
+                            Margin="0" 
+                            VerticalOptions="Center"/>
+                    <Label Text="{Binding CurrentPathName}" 
+                           FontSize="28" 
+                           FontAttributes="Bold" 
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
 
+                <Button Grid.Column="1" Text="🗑️ 回收站" Command="{Binding GoToTrashCommand}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,8" />
+                <Button Grid.Column="2" Text="{Binding EditModeButtonText}" Command="{Binding ToggleEditModeCommand}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,8" />
+                <Button Grid.Column="3" Text="📝 日志" Command="{Binding ExportLogCommand}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,8" Margin="0,0,10,0" />
+
+                <!-- 导入按钮仅在根书架显示 -->
+                <Button Grid.Column="4" 
+                        Text="+ 导入书籍" 
+                        IsVisible="{Binding IsNotRoot, Converter={StaticResource InvertedBoolConverter}}"
+                        Style="{StaticResource PrimaryButton}" 
+                        Command="{Binding ImportBookCommand}" 
+                        Padding="16,8" 
+                        CornerRadius="20" />
+            </Grid>
+
+            <!-- ================= 树形混合文件列表 ================= -->
+            <CollectionView Grid.Row="1" ItemsSource="{Binding Items}" SelectionMode="None">
                 <CollectionView.EmptyView>
-                    <VerticalStackLayout VerticalOptions="Center" 
-                                     HorizontalOptions="Center" 
-                                     Spacing="16">
-                        <Label Text="📚" FontSize="72" HorizontalOptions="Center" Opacity="0.8"/>
-                        <Label Text="你的书架空空如也" FontSize="16" TextColor="{StaticResource TextSecondary}" HorizontalOptions="Center" />
-                        <Label Text="点击右上角导入第一本本地小说吧" FontSize="14" TextColor="{StaticResource TextPlaceholder}" HorizontalOptions="Center" />
+                    <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16">
+                        <Label Text="📦" FontSize="72" HorizontalOptions="Center" Opacity="0.8"/>
+                        <Label Text="这里空空如也" FontSize="16" TextColor="{StaticResource TextSecondary}" HorizontalOptions="Center" />
                     </VerticalStackLayout>
                 </CollectionView.EmptyView>
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <Grid Padding="20,10" ColumnDefinitions="60, *">
+                        <Grid Padding="20,10" ColumnDefinitions="60, *, Auto">
+
+                            <Grid.Behaviors>
+                                <toolkit:TouchBehavior 
+                                    LongPressCommand="{Binding BindingContext.ItemLongPressCommand, Source={x:Reference RootPage}}"
+                                    LongPressCommandParameter="{Binding .}"
+                                    DefaultAnimationDuration="250"
+                                    DefaultAnimationEasing="{x:Static Easing.CubicInOut}"
+                                    PressedOpacity="0.8" />
+                            </Grid.Behaviors>
+
                             <Grid.GestureRecognizers>
                                 <TapGestureRecognizer 
-            Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:LibraryViewModel}}, Path=OpenBookCommand}" 
-            CommandParameter="{Binding .}" />
+                                    Command="{Binding BindingContext.OpenItemCommand, Source={x:Reference RootPage}}" 
+                                    CommandParameter="{Binding .}" />
                             </Grid.GestureRecognizers>
-                            <Border Grid.Column="0" 
-                                HeightRequest="80" 
-                                WidthRequest="60" 
-                                BackgroundColor="{StaticResource BgLight}" 
-                                Stroke="{StaticResource TextPlaceholder}" 
-                                StrokeThickness="1" 
-                                StrokeShape="RoundRectangle 4">
-                                <Label Text="TXT" 
-                                   VerticalOptions="Center" 
-                                   HorizontalOptions="Center" 
-                                   TextColor="{StaticResource TextSecondary}" 
-                                   FontSize="12"/>
+
+                            <!-- UI 多态：根据 IsFolder 动态显隐 -->
+                            <Border Grid.Column="0" IsVisible="{Binding IsFolder}" HeightRequest="80" WidthRequest="60" BackgroundColor="#FFF8E1" Stroke="#FFE082" StrokeThickness="1" StrokeShape="RoundRectangle 8">
+                                <Label Text="📁" VerticalOptions="Center" HorizontalOptions="Center" FontSize="32"/>
+                            </Border>
+
+                            <Border Grid.Column="0" IsVisible="{Binding IsFolder, Converter={StaticResource InvertedBoolConverter}}" HeightRequest="80" WidthRequest="60" BackgroundColor="{StaticResource BgLight}" Stroke="{StaticResource TextPlaceholder}" StrokeThickness="1" StrokeShape="RoundRectangle 4">
+                                <Label Text="TXT" VerticalOptions="Center" HorizontalOptions="Center" TextColor="{StaticResource TextSecondary}" FontSize="12"/>
                             </Border>
 
                             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Margin="15,0,0,0">
-                                <Label Text="{Binding Title}" 
-                                   FontSize="16" 
-                                   FontAttributes="Bold" 
-                                   TextColor="{StaticResource TextPrimary}" />
-                                <!-- 【新增】绑定刚才写好的动态计算属性 -->
-                                <Label Text="{Binding ProgressText}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="0,5,0,0" />
-                                <!--<Label Text="已完美解析入库" 
-                                   FontSize="12" 
-                                   TextColor="{StaticResource MorandiBlue}" 
-                                   Margin="0,5,0,0" />-->
+                                <Label Text="{Binding Title}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                                <Label Text="{Binding Subtitle}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="0,5,0,0" />
                             </VerticalStackLayout>
 
+                            <!-- 【最核心极简修复】：彻底解耦复杂绑定，UI 层只认 ShowCheckBox 属性 -->
+                            <CheckBox Grid.Column="2" 
+                                      VerticalOptions="Center" 
+                                      IsChecked="{Binding IsSelected}" 
+                                      InputTransparent="True" 
+                                      IsVisible="{Binding ShowCheckBox}" />
                         </Grid>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
-
             </CollectionView>
+
+            <!-- 底部高阶管理操作栏 -->
+            <Grid Grid.Row="2" Padding="20,15" BackgroundColor="#F5F5F5" IsVisible="{Binding IsEditMode}">
+                <Button Text="📁 移动选中项" Command="{Binding MoveSelectedItemsToFolderCommand}" Style="{StaticResource PrimaryButton}" CornerRadius="8" />
+            </Grid>
+
         </Grid>
-        <!-- 【核心修复：绝对置顶的全屏遮罩】不需要指定 Row/Column，自然覆盖全屏，绝不撑开画面 -->
+
         <Grid BackgroundColor="#CC000000" IsVisible="{Binding IsBusy}">
             <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="15">
                 <ActivityIndicator IsRunning="{Binding IsBusy}" Color="White" WidthRequest="50" HeightRequest="50" />
