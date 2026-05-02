@@ -63,11 +63,21 @@
 	
 	
 	<ItemGroup>
+
+		<!-- 引用刚才生成的 SVG 文件 -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg"
+				  ForegroundFile="Resources\AppIcon\appiconfg.svg"
+				  Color="#ECEFF1" />
+
+		<!-- 启动屏建议直接使用前景图，背景设为纯白 -->
+		<MauiSplashScreen Include="Resources\AppIcon\appiconfg.svg"
+						  Color="#FFFFFF"
+						  BaseSize="128,128" />
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+		
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+		<!-- <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" /> -->
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
