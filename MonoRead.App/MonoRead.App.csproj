@@ -28,7 +28,7 @@
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
 		<!-- Display name -->
-		<ApplicationTitle>MonoRead.App</ApplicationTitle>
+		<ApplicationTitle>MonoRead</ApplicationTitle>
 
 		<!-- App Identifier -->
 		<ApplicationId>com.companyname.monoread.app</ApplicationId>

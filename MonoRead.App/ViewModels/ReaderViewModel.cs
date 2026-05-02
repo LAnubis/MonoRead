@@ -32,11 +32,15 @@ namespace MonoRead.App.ViewModels
 
         // 渲染缓冲池：承载切好片的一页页内容
         [ObservableProperty]
-        private ObservableCollection<ReaderPageNode> _bookPages = new();
+        private ObservableCollection<ReaderPageNode> _bookPages = new(); // 假设您已建好 ReaderPageNode 模型
 
         // 翻页指针：由 CarouselView 驱动
         [ObservableProperty]
         private int _currentPagePosition = 0;
+
+        // 【核心修复 1：防跳页并发锁】
+        // 专门拦截 CarouselView 在后台追加数据时错误地将 Position 重置为 0 的系统级 Bug
+        private bool _isAppendingPages = false;
 
         // ==================== 导航与控件状态 ====================
         [ObservableProperty]
@@ -119,6 +123,53 @@ namespace MonoRead.App.ViewModels
             }
         }
 
+        // ==================== 核心辅助：纯净的本地文本流提取引擎 ====================
+        private async Task<string> ExtractChapterContentAsync(BookChapter chapter)
+        {
+            if (CurrentBook == null) return string.Empty;
+
+            return await Task.Run(async () =>
+            {
+                long startCharIndex = 0;
+                if (!string.IsNullOrWhiteSpace(chapter.StartLocator) && chapter.StartLocator != "{}")
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(chapter.StartLocator);
+                    startCharIndex = doc.RootElement.GetProperty("position").GetInt64();
+                }
+
+                var nextChapter = CurrentBook.Chapters.FirstOrDefault(c => c.SortOrder == chapter.SortOrder + 1);
+                long endCharIndex = long.MaxValue;
+                if (nextChapter != null && !string.IsNullOrWhiteSpace(nextChapter.StartLocator) && nextChapter.StartLocator != "{}")
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(nextChapter.StartLocator);
+                    endCharIndex = doc.RootElement.GetProperty("position").GetInt64();
+                }
+
+                int lengthToRead = endCharIndex == long.MaxValue ? 20000 : (int)(endCharIndex - startCharIndex);
+                if (lengthToRead <= 0) return "（本章暂无正文内容）";
+                if (lengthToRead > 20000) lengthToRead = 20000;
+
+                using var reader = new StreamReader(CurrentBook.FilePath);
+
+                if (startCharIndex > 0)
+                {
+                    char[] throwawayBuffer = new char[8192];
+                    long remainingToSkip = startCharIndex;
+                    while (remainingToSkip > 0)
+                    {
+                        int toRead = (int)Math.Min(throwawayBuffer.Length, remainingToSkip);
+                        int readCount = await reader.ReadAsync(throwawayBuffer, 0, toRead);
+                        if (readCount == 0) break;
+                        remainingToSkip -= readCount;
+                    }
+                }
+
+                char[] contentBuffer = new char[lengthToRead];
+                int charsRead = await reader.ReadAsync(contentBuffer, 0, lengthToRead);
+                return new string(contentBuffer, 0, charsRead);
+            });
+        }
+
         // ==================== 核心引擎：加载与切片 ====================
         private async Task LoadChapterContentAsync(BookChapter targetChapter, bool clearBuffer)
         {
@@ -133,71 +184,33 @@ namespace MonoRead.App.ViewModels
 
             try
             {
-                CurrentChapter = targetChapter;
-                ChapterTitle = targetChapter.Title;
-
-                CanGoPrevious = CurrentBook.Chapters.Any(c => c.SortOrder < targetChapter.SortOrder);
-                CanGoNext = CurrentBook.Chapters.Any(c => c.SortOrder > targetChapter.SortOrder);
-
-                // 提取全量文本
-                string extractedContent = await Task.Run(async () =>
+                if (clearBuffer)
                 {
-                    long startCharIndex = 0;
-                    if (!string.IsNullOrWhiteSpace(targetChapter.StartLocator) && targetChapter.StartLocator != "{}")
-                    {
-                        using var doc = System.Text.Json.JsonDocument.Parse(targetChapter.StartLocator);
-                        startCharIndex = doc.RootElement.GetProperty("position").GetInt64();
-                    }
+                    CurrentChapter = targetChapter;
+                    ChapterTitle = targetChapter.Title;
+                    CanGoPrevious = CurrentBook.Chapters.Any(c => c.SortOrder < targetChapter.SortOrder);
+                    CanGoNext = CurrentBook.Chapters.Any(c => c.SortOrder > targetChapter.SortOrder);
+                }
 
-                    var nextChapter = CurrentBook.Chapters.FirstOrDefault(c => c.SortOrder == targetChapter.SortOrder + 1);
-                    long endCharIndex = long.MaxValue;
-                    if (nextChapter != null && !string.IsNullOrWhiteSpace(nextChapter.StartLocator) && nextChapter.StartLocator != "{}")
-                    {
-                        using var doc = System.Text.Json.JsonDocument.Parse(nextChapter.StartLocator);
-                        endCharIndex = doc.RootElement.GetProperty("position").GetInt64();
-                    }
+                string extractedContent = await ExtractChapterContentAsync(targetChapter);
 
-                    int lengthToRead = endCharIndex == long.MaxValue ? 20000 : (int)(endCharIndex - startCharIndex);
-                    if (lengthToRead <= 0) return "（本章暂无正文内容）";
-                    if (lengthToRead > 20000) lengthToRead = 20000;
-
-                    using var reader = new StreamReader(CurrentBook.FilePath);
-                    if (startCharIndex > 0)
-                    {
-                        char[] throwawayBuffer = new char[8192];
-                        long remainingToSkip = startCharIndex;
-                        while (remainingToSkip > 0)
-                        {
-                            int toRead = (int)Math.Min(throwawayBuffer.Length, remainingToSkip);
-                            int readCount = await reader.ReadAsync(throwawayBuffer, 0, toRead);
-                            if (readCount == 0) break;
-                            remainingToSkip -= readCount;
-                        }
-                    }
-
-                    char[] contentBuffer = new char[lengthToRead];
-                    int charsRead = await reader.ReadAsync(contentBuffer, 0, lengthToRead);
-                    return new string(contentBuffer, 0, charsRead);
-                });
-
-                // 【算法切入】：调用分页器将长文本切为单页
+                // 假设您的 TextPaginator 在 Utils 命名空间下
                 var newPages = Utils.TextPaginator.Paginate(extractedContent, targetChapter.Id, targetChapter.Title, ReaderFontSize);
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    if (clearBuffer)
-                    {
-                        BookPages.Clear();
-                    }
-
+                    if (clearBuffer) BookPages.Clear();
                     foreach (var p in newPages) BookPages.Add(p);
+                    if (clearBuffer) CurrentPagePosition = 0;
 
-                    if (clearBuffer)
+                    // 【核心死锁解除】：碰到 1 页的短序言时，强行触发静默预加载！
+                    if (BookPages.Count <= 2 && CanGoNext)
                     {
-                        CurrentPagePosition = 0;
+                        Task.Run(() => PreloadNextChapterSeamlesslyAsync());
                     }
                 });
 
+                // 【首章/跳转落盘】
                 CurrentBook.ProgressLocator = $"{{\"chapterId\": \"{targetChapter.Id}\"}}";
                 await _bookRepository.UpdateBookProgressAsync(CurrentBook.Id, CurrentBook.ProgressLocator);
             }
@@ -211,27 +224,81 @@ namespace MonoRead.App.ViewModels
             }
         }
 
-        // ==================== 无缝连读监控机制 ====================
+        // ==================== 状态机游标监控 (无缝连读与落盘核心) ====================
         partial void OnCurrentPagePositionChanged(int value)
         {
-            // 越界保护
-            if (BookPages == null || BookPages.Count == 0 || value < 0) return;
+            // 【防抖与防跳页拦截】如果在追加新数据，忽略一切位置归零信号！
+            if (_isAppendingPages || BookPages == null || BookPages.Count == 0 || value < 0 || value >= BookPages.Count) return;
 
-            // 1. 同步顶部/底部显示状态
-            if (value < BookPages.Count)
+            var currentNode = BookPages[value];
+            ChapterTitle = currentNode.ChapterTitle;
+
+            // 【跨章状态同步与实时落盘】
+            if (CurrentChapter == null || CurrentChapter.Id != currentNode.ChapterId)
             {
-                ChapterTitle = BookPages[value].ChapterTitle;
+                CurrentChapter = CurrentBook?.Chapters.FirstOrDefault(c => c.Id == currentNode.ChapterId);
+                if (CurrentChapter != null && CurrentBook != null)
+                {
+                    CanGoPrevious = CurrentBook.Chapters.Any(c => c.SortOrder < CurrentChapter.SortOrder);
+                    CanGoNext = CurrentBook.Chapters.Any(c => c.SortOrder > CurrentChapter.SortOrder);
+
+                    // 【核心修复 2】：用户无缝连读滑入新章节时，立刻在后台保存进度
+                    CurrentBook.ProgressLocator = $"{{\"chapterId\": \"{CurrentChapter.Id}\"}}";
+                    Task.Run(async () => await _bookRepository.UpdateBookProgressAsync(CurrentBook.Id, CurrentBook.ProgressLocator));
+                }
             }
 
-            // 2. 如果滑到了本章末尾，静默追加下一章
-            if (value == BookPages.Count - 1 && !IsLoading && CanGoNext)
+            // 【无缝连读触发点】：读到倒数第 2 页，静默拉取下一章
+            if (value >= BookPages.Count - 2 && !IsLoading && CanGoNext)
             {
-                var nextChapter = CurrentBook?.Chapters.Where(c => c.SortOrder > CurrentChapter?.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
-                if (nextChapter != null)
+                Task.Run(() => PreloadNextChapterSeamlesslyAsync());
+            }
+        }
+
+        // ==================== 静默预加载引擎 (带防跳页并发锁) ====================
+        private async Task PreloadNextChapterSeamlesslyAsync()
+        {
+            if (IsLoading || CurrentBook == null || !BookPages.Any()) return;
+
+            IsLoading = true;
+            try
+            {
+                var lastPage = BookPages.Last();
+                var lastLoadedChapter = CurrentBook.Chapters.FirstOrDefault(c => c.Id == lastPage.ChapterId);
+                if (lastLoadedChapter == null) return;
+
+                var chapterToPreload = CurrentBook.Chapters.Where(c => c.SortOrder > lastLoadedChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
+
+                if (chapterToPreload != null)
                 {
-                    // 注意：clearBuffer 为 false，实现无缝追加
-                    _ = LoadChapterContentAsync(nextChapter, clearBuffer: false);
+                    string extractedContent = await ExtractChapterContentAsync(chapterToPreload);
+                    var newPages = Utils.TextPaginator.Paginate(extractedContent, chapterToPreload.Id, chapterToPreload.Title, ReaderFontSize);
+
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        // 【核心修复 1】：上锁追加
+                        _isAppendingPages = true;
+                        int savedPosition = CurrentPagePosition;
+
+                        foreach (var p in newPages) BookPages.Add(p);
+
+                        // 强行把游标钉死在用户当前阅读的位置
+                        if (CurrentPagePosition != savedPosition)
+                        {
+                            CurrentPagePosition = savedPosition;
+                        }
+
+                        _isAppendingPages = false; // 解锁
+                    });
                 }
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"预加载下一章失败: {ex.Message}");
+            }
+            finally
+            {
+                IsLoading = false;
             }
         }
 
@@ -241,10 +308,7 @@ namespace MonoRead.App.ViewModels
         {
             if (CurrentBook == null || CurrentChapter == null || IsLoading) return;
             var prevChapter = CurrentBook.Chapters.Where(c => c.SortOrder < CurrentChapter.SortOrder).OrderByDescending(c => c.SortOrder).FirstOrDefault();
-            if (prevChapter != null)
-            {
-                await LoadChapterContentAsync(prevChapter, clearBuffer: true);
-            }
+            if (prevChapter != null) await LoadChapterContentAsync(prevChapter, clearBuffer: true);
         }
 
         [RelayCommand]
@@ -252,10 +316,7 @@ namespace MonoRead.App.ViewModels
         {
             if (CurrentBook == null || CurrentChapter == null || IsLoading) return;
             var nextChapter = CurrentBook.Chapters.Where(c => c.SortOrder > CurrentChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
-            if (nextChapter != null)
-            {
-                await LoadChapterContentAsync(nextChapter, clearBuffer: true);
-            }
+            if (nextChapter != null) await LoadChapterContentAsync(nextChapter, clearBuffer: true);
         }
 
         // ==================== 界面与菜单控制 ====================
@@ -289,7 +350,6 @@ namespace MonoRead.App.ViewModels
             {
                 ReaderFontSize += 2;
                 Preferences.Default.Set("ReaderFontSize", ReaderFontSize);
-                // 重新排版当前章
                 if (CurrentChapter != null) _ = LoadChapterContentAsync(CurrentChapter, clearBuffer: true);
             }
         }
@@ -301,7 +361,6 @@ namespace MonoRead.App.ViewModels
             {
                 ReaderFontSize -= 2;
                 Preferences.Default.Set("ReaderFontSize", ReaderFontSize);
-                // 重新排版当前章
                 if (CurrentChapter != null) _ = LoadChapterContentAsync(CurrentChapter, clearBuffer: true);
             }
         }

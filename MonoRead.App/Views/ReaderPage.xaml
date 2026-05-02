@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:MonoRead.App.ViewModels"
              x:Class="MonoRead.App.Views.ReaderPage"
+             x:Name="RootPage"
              Shell.NavBarIsVisible="False"
              Shell.TabBarIsVisible="False"
              BackgroundColor="{Binding PageBackgroundColor}">
@@ -12,7 +13,11 @@
         <!-- ==================== 图层 1：底层 (翻页引擎核心区) ==================== -->
         <Grid RowDefinitions="*, Auto">
 
-            <!-- 【引擎替换】CarouselView 横滑翻页容器 -->
+            <!-- CarouselView 横滑翻页容器 -->
+            <!-- 【核心修复 4】：增加 AnimatePositionChanges="False" 彻底消除追加数据时的闪烁与乱跳 -->
+            <!-- CarouselView 横滑翻页容器 -->
+            <!-- 【修正】：已移除不存在的 AnimatePositionChanges 属性 -->
+            <!-- 现在的防跳页完全由 ViewModel 中的 _isAppendingPages 锁来保障，更符合 MVVM 原则 -->
             <CarouselView x:Name="ReaderCarousel" 
                           Grid.Row="0"
                           ItemsSource="{Binding BookPages}" 
@@ -21,36 +26,32 @@
                           HorizontalScrollBarVisibility="Never">
                 <CarouselView.ItemTemplate>
                     <DataTemplate>
-                        <!-- 每一页撑满容器 -->
                         <Grid Padding="20,40,20,0">
-                            <!-- 正文 -->
                             <Label Text="{Binding Content}" 
-                                   FontSize="{Binding BindingContext.ReaderFontSize, Source={x:Reference ReaderCarousel}}" 
-                                   LineHeight="1.8"
-                                   TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference ReaderCarousel}}" 
+                                   FontSize="{Binding BindingContext.ReaderFontSize, Source={x:Reference RootPage}}" 
+                                   LineHeight="1.8" 
+                                   TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference RootPage}}" 
                                    VerticalOptions="FillAndExpand" 
                                    HorizontalOptions="FillAndExpand"/>
-
-                            <!-- 页码提示 -->
-                            <Label Text="{Binding PageIndex, StringFormat='{0}'}"
-                                   FontSize="10"
-                                   TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference ReaderCarousel}}"
-                                   HorizontalOptions="End"
-                                   VerticalOptions="End"
+                            <Label Text="{Binding PageIndex, StringFormat='{0}'}" 
+                                   FontSize="10" 
+                                   TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" 
+                                   HorizontalOptions="End" 
+                                   VerticalOptions="End" 
                                    Margin="0,0,0,10"/>
                         </Grid>
                     </DataTemplate>
                 </CarouselView.ItemTemplate>
             </CarouselView>
 
-            <!-- 【手势捕捉区】仅在屏幕正中央放置窄条捕捉器，防止吞掉左右滑动翻页的手势 -->
-            <BoxView Grid.Row="0" HorizontalOptions="Center" VerticalOptions="Center" WidthRequest="120" HeightRequest="200" Color="Transparent">
-                <BoxView.GestureRecognizers>
+            <!-- 【手势捕捉区】：使用 Grid 彻底替代透明 BoxView 防黑屏，精准居中拦截 -->
+            <Grid Grid.Row="0" HorizontalOptions="Center" VerticalOptions="Center" WidthRequest="100" HeightRequest="200" BackgroundColor="Transparent">
+                <Grid.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
-                </BoxView.GestureRecognizers>
-            </BoxView>
+                </Grid.GestureRecognizers>
+            </Grid>
 
-            <!-- 底部常驻信息栏 (可选) -->
+            <!-- 底部常驻信息栏 -->
             <Grid Grid.Row="1" Margin="20,5,20,15">
                 <Label Text="{Binding ChapterTitle}" FontSize="11" TextColor="{Binding StatusTextColor}" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1"/>
             </Grid>
@@ -58,12 +59,13 @@
 
         <!-- ==================== 图层 2：悬浮控制面板层 ==================== -->
         <Grid RowDefinitions="Auto, *, Auto" IsVisible="{Binding IsMenuVisible}" BackgroundColor="Transparent">
-            <!-- 退出菜单透明区域 -->
-            <BoxView Grid.Row="1" Color="Transparent">
-                <BoxView.GestureRecognizers>
+
+            <!-- 【防黑屏净化】：退出菜单的外部透明区域替换为 Grid -->
+            <Grid Grid.Row="1" BackgroundColor="Transparent">
+                <Grid.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding ToggleMenuCommand}" />
-                </BoxView.GestureRecognizers>
-            </BoxView>
+                </Grid.GestureRecognizers>
+            </Grid>
 
             <!-- 顶部栏 -->
             <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" BackgroundColor="#E61C1C1E" Padding="15,40,15,15">
@@ -72,14 +74,13 @@
             </Grid>
 
             <!-- 底部设置面板 -->
-            <Border Grid.Row="2" BackgroundColor="#E61C1C1E" Padding="20" StrokeShape="RoundRectangle 20,20,0,0">
+            <Border Grid.Row="2" BackgroundColor="#E61C1C1E" Padding="20" StrokeShape="RoundRectangle 20,20,0,0" StrokeThickness="0">
                 <VerticalStackLayout Spacing="25">
 
-                    <!-- 原有设置面板内容保持不变 -->
                     <Grid ColumnDefinitions="Auto, *">
                         <Button Grid.Column="0" Text="三 目录" Command="{Binding ToggleTocCommand}" BackgroundColor="Transparent" TextColor="White" FontSize="16" />
 
-                        <!-- 保留手动切换上一章/下一章的入口以备不时之需 -->
+                        <!-- 保留手动切换上一章/下一章入口 -->
                         <HorizontalStackLayout Grid.Column="1" HorizontalOptions="End" Spacing="10">
                             <Button Text="上一章" Command="{Binding PreviousChapterCommand}" IsEnabled="{Binding CanGoPrevious}" BackgroundColor="Transparent" TextColor="#888" FontSize="12" Padding="5"/>
                             <Button Text="下一章" Command="{Binding NextChapterCommand}" IsEnabled="{Binding CanGoNext}" BackgroundColor="Transparent" TextColor="#888" FontSize="12" Padding="5"/>
@@ -157,7 +158,7 @@
                             <Grid.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:ReaderViewModel}}, Path=SelectChapterCommand}" CommandParameter="{Binding .}" />
                             </Grid.GestureRecognizers>
-                            <Label Text="{Binding Title}" FontSize="16" TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference ReaderCarousel}}" LineBreakMode="TailTruncation" MaxLines="1" />
+                            <Label Text="{Binding Title}" FontSize="16" TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference RootPage}}" LineBreakMode="TailTruncation" MaxLines="1" />
                             <BoxView HeightRequest="1" Color="#11000000" VerticalOptions="End" Margin="0,15,-20,-15" />
                         </Grid>
                     </DataTemplate>
