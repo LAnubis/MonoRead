@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MonoRead.App.Views.SettingsPage"
+             Shell.NavBarIsVisible="False"
+             Title="设置"
+             BackgroundColor="{StaticResource BgLight}">
+    <Grid RowDefinitions="Auto, *">
+        <Grid Grid.Row="0" Padding="20,25,20,15">
+            <Label Text="设置" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
+        </Grid>
+
+        <VerticalStackLayout Grid.Row="1" Padding="20" Spacing="15">
+            <!-- MAUI 原生质感设置项按钮 -->
+            <Button Text="🗑️ 回收站" Command="{Binding GoToTrashCommand}" BackgroundColor="#F0F0F0" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" CornerRadius="12" Padding="20" HorizontalOptions="Fill" />
+            <Button Text="📝 导出崩溃日志" Command="{Binding ExportLogCommand}" BackgroundColor="#F0F0F0" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" CornerRadius="12" Padding="20" HorizontalOptions="Fill" />
+        </VerticalStackLayout>
+    </Grid>
+</ContentPage>

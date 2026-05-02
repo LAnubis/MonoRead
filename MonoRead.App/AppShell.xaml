@@ -6,10 +6,26 @@
    xmlns:views="clr-namespace:MonoRead.App.Views"
     Shell.FlyoutBehavior="Disabled">
 
-    <TabBar>
+    <!--<TabBar>
         <Tab Title="书架">
             <ShellContent ContentTemplate="{DataTemplate views:LibraryPage}" />
         </Tab>
-    </TabBar>
+    </TabBar>-->
 
+    <TabBar>
+        <!-- Tab 1: 最近阅读 -->
+        <Tab Title="最近" Icon="🕒">
+            <ShellContent ContentTemplate="{DataTemplate views:RecentPage}" Route="RecentPage" />
+        </Tab>
+
+        <!-- Tab 2: 书架与文件夹管理 -->
+        <Tab Title="书架" Icon="📚">
+            <ShellContent ContentTemplate="{DataTemplate views:LibraryPage}" Route="LibraryPage" />
+        </Tab>
+
+        <!-- Tab 3: 系统设置 -->
+        <Tab Title="设置" Icon="⚙️">
+            <ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" Route="SettingsPage" />
+        </Tab>
+    </TabBar>
 </Shell>

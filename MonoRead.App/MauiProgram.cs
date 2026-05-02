@@ -1,6 +1,8 @@
 ﻿using CommunityToolkit.Maui; // 必须引用
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using MonoRead.App.ViewModels;
+using MonoRead.App.Views;
 using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure;
 using MonoRead.Infrastructure.Services;
@@ -45,7 +47,21 @@ namespace MonoRead.App
             builder.Services.AddScoped<IBookParsingUseCase, BookParsingUseCase>();
             // 在 MauiProgram.cs 的 services 注册区域加上这行：
             builder.Services.AddScoped<IFolderRepository, FolderRepository>();
+            // 注册 ViewModel
+            builder.Services.AddTransient<LibraryViewModel>();
+            builder.Services.AddTransient<ReaderViewModel>();
 
+            // 【新增注册】
+            builder.Services.AddTransient<RecentViewModel>();
+            builder.Services.AddTransient<SettingsViewModel>();
+
+            // 注册 View
+            builder.Services.AddTransient<LibraryPage>();
+            builder.Services.AddTransient<ReaderPage>();
+
+            // 【新增注册】
+            builder.Services.AddTransient<RecentPage>();
+            builder.Services.AddTransient<SettingsPage>();
             // 1. 先把 App 构建出来
             var app = builder.Build();
 

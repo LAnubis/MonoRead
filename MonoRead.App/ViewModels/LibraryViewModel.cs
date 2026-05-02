@@ -269,15 +269,15 @@ namespace MonoRead.App.ViewModels
             finally { IsBusy = false; }
         }
 
-        [RelayCommand]
-        private async Task GoToTrashAsync()
-        {
-            try { await Shell.Current.GoToAsync("TrashPage"); }
-            catch (Exception) { await Application.Current.MainPage.DisplayAlert("提示", "回收站页面暂未创建", "确定"); }
-        }
+        //[RelayCommand]
+        //private async Task GoToTrashAsync()
+        //{
+        //    try { await Shell.Current.GoToAsync("TrashPage"); }
+        //    catch (Exception) { await Application.Current.MainPage.DisplayAlert("提示", "回收站页面暂未创建", "确定"); }
+        //}
 
-        [RelayCommand]
-        private async Task ExportLogAsync() { /* 原有导出逻辑 */ }
+        //[RelayCommand]
+        //private async Task ExportLogAsync() { /* 原有导出逻辑 */ }
 
         // 【废弃指令】：ItemLongPressCommand 已根据要求被抹除。
 

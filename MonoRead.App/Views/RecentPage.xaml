@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MonoRead.App.Views.RecentPage"
+             x:Name="RootPage"
+             Shell.NavBarIsVisible="False"
+             Title="最近"
+             BackgroundColor="{StaticResource BgLight}">
+    <Grid RowDefinitions="Auto, *">
+        <Grid Grid.Row="0" Padding="20,25,20,15">
+            <Label Text="最近阅读" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
+        </Grid>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding RecentBooks}" SelectionMode="None">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16" Margin="0,100,0,0">
+                    <Label Text="🕒" FontSize="72" HorizontalOptions="Center" Opacity="0.5"/>
+                    <Label Text="最近 3 天暂无阅读记录" FontSize="16" TextColor="{StaticResource TextPlaceholder}" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Grid Padding="20,10" ColumnDefinitions="60, *">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding BindingContext.OpenBookCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" />
+                        </Grid.GestureRecognizers>
+
+                        <Border Grid.Column="0" HeightRequest="80" WidthRequest="60" BackgroundColor="{StaticResource BgLight}" Stroke="{StaticResource TextPlaceholder}" StrokeThickness="1" StrokeShape="RoundRectangle 4">
+                            <Label Text="TXT" VerticalOptions="Center" HorizontalOptions="Center" TextColor="{StaticResource TextSecondary}" FontSize="12"/>
+                        </Border>
+
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Margin="15,0,0,0">
+                            <Label Text="{Binding Title}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                            <Label Text="{Binding ProgressText}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="0,5,0,0" />
+                            <Label Text="{Binding UpdatedAt, StringFormat='{0:MM-dd HH:mm}'}" FontSize="11" TextColor="{StaticResource TextPlaceholder}" Margin="0,2,0,0" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

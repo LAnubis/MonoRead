@@ -14,9 +14,11 @@
     <Grid>
         <Grid RowDefinitions="Auto, *, Auto">
 
-            <!-- ================= 顶部导航栏 ================= -->
-            <Grid Grid.Row="0" ColumnDefinitions="*, Auto, Auto, Auto, Auto" Padding="20,15,20,10">
+            <!-- ================= 顶部导航栏 (已解耦净化) ================= -->
+            <!-- 移除了回收站和日志，列数由 5 列缩减为 3 列 -->
+            <Grid Grid.Row="0" ColumnDefinitions="*, Auto, Auto" Padding="20,15,20,10">
 
+                <!-- 标题与返回键 -->
                 <HorizontalStackLayout Grid.Column="0" VerticalOptions="Center" Spacing="10">
                     <Button Text="⬅" 
                             IsVisible="{Binding IsNotRoot}" 
@@ -33,11 +35,18 @@
                            VerticalOptions="Center" />
                 </HorizontalStackLayout>
 
-                <Button Grid.Column="1" Text="🗑️ 回收站" Command="{Binding GoToTrashCommand}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,8" />
-                <Button Grid.Column="2" Text="{Binding EditModeButtonText}" Command="{Binding ToggleEditModeCommand}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,8" />
-                <Button Grid.Column="3" Text="📝 日志" Command="{Binding ExportLogCommand}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,8" Margin="0,0,10,0" />
+                <!-- 管理模式切换按钮 -->
+                <Button Grid.Column="1" 
+                        Text="{Binding EditModeButtonText}" 
+                        Command="{Binding ToggleEditModeCommand}" 
+                        BackgroundColor="Transparent" 
+                        TextColor="{StaticResource TextSecondary}" 
+                        FontSize="14" 
+                        Padding="10,8" 
+                        Margin="0,0,10,0"/>
 
-                <Button Grid.Column="4" 
+                <!-- 导入书籍按钮 -->
+                <Button Grid.Column="2" 
                         Text="+ 导入书籍" 
                         IsVisible="{Binding IsNotRoot, Converter={StaticResource InvertedBoolConverter}}"
                         Style="{StaticResource PrimaryButton}" 
@@ -46,7 +55,7 @@
                         CornerRadius="20" />
             </Grid>
 
-            <!-- ================= 树形混合文件列表 ================= -->
+            <!-- ================= 树形混合文件列表 (保持不变) ================= -->
             <CollectionView Grid.Row="1" ItemsSource="{Binding Items}" SelectionMode="None">
                 <CollectionView.EmptyView>
                     <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16">
@@ -58,8 +67,6 @@
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
                         <Grid Padding="20,10" ColumnDefinitions="60, *, Auto">
-
-                            <!-- 【移除】：彻底删除了引起诸多 Bug 和手势冲突的 Grid.Behaviors (TouchBehavior) -->
 
                             <Grid.GestureRecognizers>
                                 <TapGestureRecognizer 
@@ -81,7 +88,7 @@
                                 <Label Text="{Binding Subtitle}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="0,5,0,0" />
                             </VerticalStackLayout>
 
-                            <!-- 极简复选框，完全由 ViewModel 下发的 ShowCheckBox 调度 -->
+                            <!-- 极简复选框 -->
                             <CheckBox Grid.Column="2" 
                                       VerticalOptions="Center" 
                                       IsChecked="{Binding IsSelected}" 
@@ -92,8 +99,7 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
 
-            <!-- ================= 底部高阶管理操作栏 ================= -->
-            <!-- 【重构】：双操作分支，左侧蓝按钮移动，右侧红底按钮删除 -->
+            <!-- ================= 底部高阶管理操作栏 (保持不变) ================= -->
             <Grid Grid.Row="2" Padding="20,15" BackgroundColor="#F5F5F5" IsVisible="{Binding IsEditMode}" ColumnDefinitions="*, *">
                 <Button Grid.Column="0" 
                         Text="📁 移动" 
@@ -102,7 +108,6 @@
                         CornerRadius="8" 
                         Margin="0,0,10,0"/>
 
-                <!-- MAUI 原生自带支持这种透明底+深红字的纯净危险操作风格 -->
                 <Button Grid.Column="1" 
                         Text="🗑️ 删除" 
                         Command="{Binding DeleteSelectedItemsCommand}" 
@@ -115,7 +120,7 @@
 
         </Grid>
 
-        <!-- ================= 绝对置顶加载遮罩 ================= -->
+        <!-- ================= 绝对置顶加载遮罩 (保持不变) ================= -->
         <Grid BackgroundColor="#CC000000" IsVisible="{Binding IsBusy}">
             <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="15">
                 <ActivityIndicator IsRunning="{Binding IsBusy}" Color="White" WidthRequest="50" HeightRequest="50" />
