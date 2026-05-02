@@ -1,5 +1,4 @@
 using MonoRead.App.ViewModels;
-using MonoRead.Infrastructure.Logging;
 
 namespace MonoRead.App.Views;
 
@@ -9,28 +8,11 @@ public partial class ReaderPage : ContentPage
     {
         InitializeComponent();
         BindingContext = viewModel;
-        // 【核心修复】：监听 ViewModel 的属性变化。一旦正文被重新排版，强行将滚动条拉回 (0,0) 顶部！
-        viewModel.PropertyChanged += (s, e) =>
-        {
-            if (e.PropertyName == nameof(ReaderViewModel.PageContent))
-            {
-                MainThread.BeginInvokeOnMainThread(async () =>
-                {
-                    try
-                    {
-                        // 稍微加长一点等待时间，给低端真机喘息的机会
-                        await Task.Delay(150);
-                        await ReaderScrollView.ScrollToAsync(0, 0, false);
-                    }
-                    catch (Exception ex)
-                    {
-                        // 【核心防御：生吞原生异常】
-                        // 如果 Android 原生引擎还没准备好导致滚动报错，直接生吞，只打日志。
-                        // 宁可用户手动滑一下回到顶部，也绝对不能让 App 闪退！
-                        LocalLogger.LogError($"[严重警告] ScrollToAsync 被系统拒绝: {ex.Message}");
-                    }
-                });
-            }
-        };
+
+        // 【架构净化提示】
+        // 旧版的 PageContent 监听和 ReaderScrollView 强制滚动逻辑已在此被彻底抹除。
+        // 全新的引擎下，一切翻页与定位（包括切片排版后回到第一页），
+        // 均由 ViewModel 中的 CurrentPagePosition 属性双向绑定驱动 CarouselView 自动完成。
+        // 我们实现了零 UI 耦合的纯正 MVVM。
     }
 }

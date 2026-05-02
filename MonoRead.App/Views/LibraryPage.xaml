@@ -37,7 +37,6 @@
                 <Button Grid.Column="2" Text="{Binding EditModeButtonText}" Command="{Binding ToggleEditModeCommand}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,8" />
                 <Button Grid.Column="3" Text="📝 日志" Command="{Binding ExportLogCommand}" BackgroundColor="Transparent" TextColor="{StaticResource TextSecondary}" FontSize="14" Padding="10,8" Margin="0,0,10,0" />
 
-                <!-- 导入按钮仅在根书架显示 -->
                 <Button Grid.Column="4" 
                         Text="+ 导入书籍" 
                         IsVisible="{Binding IsNotRoot, Converter={StaticResource InvertedBoolConverter}}"
@@ -60,14 +59,7 @@
                     <DataTemplate>
                         <Grid Padding="20,10" ColumnDefinitions="60, *, Auto">
 
-                            <Grid.Behaviors>
-                                <toolkit:TouchBehavior 
-                                    LongPressCommand="{Binding BindingContext.ItemLongPressCommand, Source={x:Reference RootPage}}"
-                                    LongPressCommandParameter="{Binding .}"
-                                    DefaultAnimationDuration="250"
-                                    DefaultAnimationEasing="{x:Static Easing.CubicInOut}"
-                                    PressedOpacity="0.8" />
-                            </Grid.Behaviors>
+                            <!-- 【移除】：彻底删除了引起诸多 Bug 和手势冲突的 Grid.Behaviors (TouchBehavior) -->
 
                             <Grid.GestureRecognizers>
                                 <TapGestureRecognizer 
@@ -89,7 +81,7 @@
                                 <Label Text="{Binding Subtitle}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="0,5,0,0" />
                             </VerticalStackLayout>
 
-                            <!-- 【最核心极简修复】：彻底解耦复杂绑定，UI 层只认 ShowCheckBox 属性 -->
+                            <!-- 极简复选框，完全由 ViewModel 下发的 ShowCheckBox 调度 -->
                             <CheckBox Grid.Column="2" 
                                       VerticalOptions="Center" 
                                       IsChecked="{Binding IsSelected}" 
@@ -100,13 +92,30 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
 
-            <!-- 底部高阶管理操作栏 -->
-            <Grid Grid.Row="2" Padding="20,15" BackgroundColor="#F5F5F5" IsVisible="{Binding IsEditMode}">
-                <Button Text="📁 移动选中项" Command="{Binding MoveSelectedItemsToFolderCommand}" Style="{StaticResource PrimaryButton}" CornerRadius="8" />
+            <!-- ================= 底部高阶管理操作栏 ================= -->
+            <!-- 【重构】：双操作分支，左侧蓝按钮移动，右侧红底按钮删除 -->
+            <Grid Grid.Row="2" Padding="20,15" BackgroundColor="#F5F5F5" IsVisible="{Binding IsEditMode}" ColumnDefinitions="*, *">
+                <Button Grid.Column="0" 
+                        Text="📁 移动" 
+                        Command="{Binding MoveSelectedItemsToFolderCommand}" 
+                        Style="{StaticResource PrimaryButton}" 
+                        CornerRadius="8" 
+                        Margin="0,0,10,0"/>
+
+                <!-- MAUI 原生自带支持这种透明底+深红字的纯净危险操作风格 -->
+                <Button Grid.Column="1" 
+                        Text="🗑️ 删除" 
+                        Command="{Binding DeleteSelectedItemsCommand}" 
+                        BackgroundColor="#FFEbee" 
+                        TextColor="#E57373" 
+                        FontAttributes="Bold"
+                        CornerRadius="8" 
+                        Margin="10,0,0,0"/>
             </Grid>
 
         </Grid>
 
+        <!-- ================= 绝对置顶加载遮罩 ================= -->
         <Grid BackgroundColor="#CC000000" IsVisible="{Binding IsBusy}">
             <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="15">
                 <ActivityIndicator IsRunning="{Binding IsBusy}" Color="White" WidthRequest="50" HeightRequest="50" />
