@@ -24,10 +24,16 @@
                     <DataTemplate>
                         <VerticalStackLayout Padding="20,40,20,40">
                             <!-- 点击唤出菜单的手势 -->
+                          
+
+
+
                             <VerticalStackLayout.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding BindingContext.ToggleMenuCommand, Source={x:Reference RootPage}}" />
+                                <!-- 核心新增：双击唤出工作台 -->
+                                <TapGestureRecognizer NumberOfTapsRequired="2" Command="{Binding BindingContext.OpenNoteWorkbenchCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" />
                             </VerticalStackLayout.GestureRecognizers>
-
+                            
                             <Label Text="{Binding Title}" FontSize="28" FontAttributes="Bold" TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference RootPage}}" Margin="0,0,0,30" />
                             <Label Text="{Binding Content}" FontSize="{Binding BindingContext.ReaderFontSize, Source={x:Reference RootPage}}" LineHeight="1.8" TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference RootPage}}" />
                             <BoxView HeightRequest="1" Color="#1A000000" Margin="0,40,0,0" />
@@ -177,6 +183,38 @@
                 <ActivityIndicator IsRunning="{Binding IsLoading}" Color="White" WidthRequest="50" HeightRequest="50" />
             </VerticalStackLayout>
         </Grid>
+        <!-- ==================== 图层 4：笔记工作台 ==================== -->
+        <Grid RowDefinitions="Auto, *, Auto, Auto" IsVisible="{Binding IsNoteOverlayVisible}" BackgroundColor="#FDFDFD">
+            <!-- 头部 -->
+            <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,40,15,15" BackgroundColor="#FFFFFF">
+                <Button Grid.Column="0" Text="取消" Command="{Binding CloseNoteWorkbenchCommand}" BackgroundColor="Transparent" TextColor="#666666" />
+                <Label Grid.Column="1" Text="写笔记" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center" />
+                <Button Grid.Column="2" Text="保存" Command="{Binding SaveNoteCommand}" CommandParameter="{Binding Source={x:Reference ExtractSourceEditor}}" BackgroundColor="Transparent" TextColor="#D1A67B" FontAttributes="Bold" />
+            </Grid>
+            <BoxView Grid.Row="0" HeightRequest="1" Color="#EEEEEE" VerticalOptions="End" />
 
+            <!-- 上半部分：用来选词的只读区 -->
+            <Grid Grid.Row="1" Padding="20">
+                <Label Text="1. 在下方文字中拖动光标选出划线句子：" FontSize="12" TextColor="#999999" VerticalOptions="Start" />
+                <!-- 必须是 Editor，因为只有它支持原生光标选词 -->
+                <Editor x:Name="ExtractSourceEditor" 
+                        Text="{Binding ExtractTargetParagraph}" 
+                        IsReadOnly="True" 
+                        FontSize="16" 
+                        TextColor="#666666" 
+                        Margin="0,25,0,0" 
+                        VerticalOptions="FillAndExpand" />
+            </Grid>
+
+            <!-- 下半部分：用户写笔记的输入框 -->
+            <Border Grid.Row="2" BackgroundColor="#FFFFFF" Stroke="#DDDDDD" StrokeThickness="1" StrokeShape="RoundRectangle 8" Padding="15" Margin="20,0,20,30" HeightRequest="150">
+                <Editor Text="{Binding UserNoteInput}" 
+                        Placeholder="2. 记录你的感悟..." 
+                        PlaceholderColor="#CCCCCC" 
+                        FontSize="16" 
+                        TextColor="#333333" 
+                        VerticalOptions="FillAndExpand" />
+            </Border>
+        </Grid>
     </Grid>
 </ContentPage>

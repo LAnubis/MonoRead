@@ -59,9 +59,21 @@ namespace MonoRead.App
             builder.Services.AddTransient<LibraryPage>();
             builder.Services.AddTransient<ReaderPage>();
 
-            // 【新增注册】
+
+
+
+            // --- 底部 TabBar 一级主模块 ---
             builder.Services.AddTransient<RecentPage>();
+            builder.Services.AddTransient<LibraryPage>();
+            builder.Services.AddTransient<NotesPage>();
             builder.Services.AddTransient<SettingsPage>();
+
+            // --- 深度路由二级业务模块 ---
+            builder.Services.AddTransient<ReaderPage>();
+            builder.Services.AddTransient<BookNotesDetailPage>();
+
+
+
             // 1. 先把 App 构建出来
             var app = builder.Build();
 

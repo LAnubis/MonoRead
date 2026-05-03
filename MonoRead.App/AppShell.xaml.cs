@@ -10,6 +10,7 @@ namespace MonoRead.App
             // 注册独立压栈的非 Tab 页路由
             Routing.RegisterRoute(nameof(ReaderPage), typeof(ReaderPage));
             Routing.RegisterRoute("TrashPage", typeof(TrashPage));
+            Routing.RegisterRoute(nameof(BookNotesDetailPage), typeof(BookNotesDetailPage));
         }
     }
 }

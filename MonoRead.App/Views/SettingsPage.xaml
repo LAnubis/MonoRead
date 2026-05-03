@@ -4,16 +4,71 @@
              x:Class="MonoRead.App.Views.SettingsPage"
              Shell.NavBarIsVisible="False"
              Title="设置"
-             BackgroundColor="{StaticResource BgLight}">
+             BackgroundColor="#F5F5F5">
+    <!-- 微信读书设置页底色通常为浅灰 -->
+
     <Grid RowDefinitions="Auto, *">
-        <Grid Grid.Row="0" Padding="20,25,20,15">
-            <Label Text="设置" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center" />
+
+        <!-- 顶部大标题区域 -->
+        <Grid Grid.Row="0" Padding="20,40,20,20" BackgroundColor="#F5F5F5">
+            <Label Text="设置" FontSize="28" FontAttributes="Bold" TextColor="#333333" VerticalOptions="Center" />
         </Grid>
 
-        <VerticalStackLayout Grid.Row="1" Padding="20" Spacing="15">
-            <!-- MAUI 原生质感设置项按钮 -->
-            <Button Text="🗑️ 回收站" Command="{Binding GoToTrashCommand}" BackgroundColor="#F0F0F0" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" CornerRadius="12" Padding="20" HorizontalOptions="Fill" />
-            <Button Text="📝 导出崩溃日志" Command="{Binding ExportLogCommand}" BackgroundColor="#F0F0F0" TextColor="{StaticResource TextPrimary}" FontAttributes="Bold" CornerRadius="12" Padding="20" HorizontalOptions="Fill" />
-        </VerticalStackLayout>
+        <!-- 设置项列表区 -->
+        <ScrollView Grid.Row="1" VerticalScrollBarVisibility="Never">
+            <VerticalStackLayout Spacing="0">
+
+                <!-- 模块组 1：数据管理 -->
+                <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,15">
+
+                    <!-- Item 1: 回收站 -->
+                    <Grid Padding="20,16" ColumnDefinitions="Auto, *, Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding GoToTrashCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="🗑️" FontSize="18" VerticalOptions="Center" Margin="0,0,15,0"/>
+                        <Label Grid.Column="1" Text="回收站" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
+                        <Label Grid.Column="2" Text=">" FontSize="16" TextColor="#B2B2B2" VerticalOptions="Center" FontAttributes="Bold"/>
+                    </Grid>
+
+                    <!-- 分割线 -->
+                    <BoxView HeightRequest="1" Color="#F0F0F0" Margin="20,0,0,0" HorizontalOptions="FillAndExpand" />
+
+                    <!-- Item 2: 导出崩溃日志 -->
+                    <Grid Padding="20,16" ColumnDefinitions="Auto, *, Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ExportLogCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="📝" FontSize="18" VerticalOptions="Center" Margin="0,0,15,0"/>
+                        <Label Grid.Column="1" Text="导出日志" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
+                        <Label Grid.Column="2" Text=">" FontSize="16" TextColor="#B2B2B2" VerticalOptions="Center" FontAttributes="Bold"/>
+                    </Grid>
+
+                </VerticalStackLayout>
+
+                <!-- 模块组 2：关于 -->
+                <VerticalStackLayout BackgroundColor="#FFFFFF">
+
+                    <!-- Item 3: 关于我们 -->
+                    <Grid Padding="20,16" ColumnDefinitions="Auto, *, Auto">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding GoToAboutUsCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="ℹ️" FontSize="18" VerticalOptions="Center" Margin="0,0,15,0"/>
+                        <Label Grid.Column="1" Text="关于我们" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
+                        <Label Grid.Column="2" Text=">" FontSize="16" TextColor="#B2B2B2" VerticalOptions="Center" FontAttributes="Bold"/>
+                    </Grid>
+
+                </VerticalStackLayout>
+
+                <!-- 底部版本号声明 (可选，提升产品正规感) -->
+                <Label Text="MonoRead V1.0.0" 
+                       FontSize="12" 
+                       TextColor="#B2B2B2" 
+                       HorizontalOptions="Center" 
+                       Margin="0,40,0,20"/>
+
+            </VerticalStackLayout>
+        </ScrollView>
     </Grid>
 </ContentPage>

@@ -43,5 +43,12 @@ namespace MonoRead.App.ViewModels
                 await Application.Current.MainPage.DisplayAlert("导出失败", ex.Message, "确定");
             }
         }
+
+        // 【新增】：关于我们的占位逻辑
+        [RelayCommand]
+        private async Task GoToAboutUsAsync()
+        {
+            await Application.Current.MainPage.DisplayAlert("提示", "关于我们页面正在建设中...", "确定");
+        }
     }
 }

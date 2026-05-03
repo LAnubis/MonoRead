@@ -7,7 +7,6 @@ using System.Collections.ObjectModel;
 
 namespace MonoRead.App.ViewModels
 {
-    // 专为瀑布流阅读准备的章节节点
     public class ReaderChapterNode
     {
         public Guid ChapterId { get; set; }
@@ -19,13 +18,14 @@ namespace MonoRead.App.ViewModels
     public partial class ReaderViewModel : ObservableObject
     {
         private readonly IBookRepository _bookRepository;
+        // private readonly IBookNoteRepository _noteRepository; // 接真实 DB 时请解除注释并注入
 
         // ==================== 状态机 ====================
         [ObservableProperty]
         private bool _isLoading;
 
         [ObservableProperty]
-        private bool _isLoadingNext; // 底部触底加载下一章的菊花图状态
+        private bool _isLoadingNext;
 
         [ObservableProperty]
         private string _bookIdString = string.Empty;
@@ -33,11 +33,9 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty]
         private Book? _currentBook;
 
-        // 当前正在阅读（或最后加载）的章节实体，用于判断上一章/下一章
         [ObservableProperty]
         private BookChapter? _currentChapter;
 
-        // 绑定给底部信息栏显示的当前章节名称
         [ObservableProperty]
         private string _chapterTitle = "加载中...";
 
@@ -63,7 +61,7 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty]
         private ObservableCollection<BookChapter> _chaptersList = new();
 
-        // ==================== UI 偏好设置 (持久化) ====================
+        // ==================== UI 偏好设置 ====================
         [ObservableProperty]
         private int _readerFontSize = Preferences.Default.Get("ReaderFontSize", 18);
 
@@ -76,9 +74,10 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty]
         private Color _statusTextColor = Color.FromArgb(Preferences.Default.Get("ThemeStatus", "#888888"));
 
-        public ReaderViewModel(IBookRepository bookRepository)
+        public ReaderViewModel(IBookRepository bookRepository /*, IBookNoteRepository noteRepository*/)
         {
             _bookRepository = bookRepository;
+            // _noteRepository = noteRepository;
         }
 
         partial void OnBookIdStringChanged(string value)
@@ -129,7 +128,6 @@ namespace MonoRead.App.ViewModels
             }
         }
 
-        // ==================== 核心辅助：文本流提取引擎 ====================
         private async Task<string> ExtractChapterContentAsync(BookChapter chapter)
         {
             if (CurrentBook == null) return string.Empty;
@@ -176,7 +174,6 @@ namespace MonoRead.App.ViewModels
             });
         }
 
-        // ==================== 瀑布流装载引擎 ====================
         private async Task LoadChapterIntoStreamAsync(BookChapter targetChapter, bool clearStream)
         {
             if (CurrentBook == null) return;
@@ -195,7 +192,6 @@ namespace MonoRead.App.ViewModels
                     Content = extractedContent
                 };
 
-                // 更新全局状态：记录底部的章节，控制导航按钮显隐
                 CurrentChapter = targetChapter;
                 ChapterTitle = targetChapter.Title;
                 CanGoPrevious = CurrentBook.Chapters.Any(c => c.SortOrder < targetChapter.SortOrder);
@@ -208,11 +204,9 @@ namespace MonoRead.App.ViewModels
                     _lastLoadedSortOrder = targetChapter.SortOrder;
                 });
 
-                // 进度落盘
                 CurrentBook.ProgressLocator = $"{{\"chapterId\": \"{targetChapter.Id}\"}}";
                 await _bookRepository.UpdateBookProgressAsync(CurrentBook.Id, CurrentBook.ProgressLocator);
 
-                // 【防抖缓冲】：如果在追加下一章，短暂挂起线程防止 CollectionView 的 Threshold 被瞬间连发触发
                 if (!clearStream) await Task.Delay(300);
             }
             catch (Exception ex)
@@ -226,11 +220,9 @@ namespace MonoRead.App.ViewModels
             }
         }
 
-        // ==================== 无缝连读：双重触底预加载 ====================
         [RelayCommand]
         private async Task LoadNextChapterSeamlesslyAsync()
         {
-            // 防重入锁
             if (IsLoadingNext || IsLoading || CurrentBook == null) return;
 
             var nextChapter = CurrentBook.Chapters
@@ -244,39 +236,96 @@ namespace MonoRead.App.ViewModels
             }
         }
 
-        // ==================== 恢复：手动导航 ====================
         [RelayCommand]
         private async Task PreviousChapterAsync()
         {
             if (CurrentBook == null || IsLoading || !ReadingStream.Any()) return;
-
-            // 手动上一章：以当前流的【最顶部】那章为基准往回找
             var firstNodeId = ReadingStream.First().ChapterId;
             var firstChapter = CurrentBook.Chapters.FirstOrDefault(c => c.Id == firstNodeId);
             if (firstChapter == null) return;
 
             var prevChapter = CurrentBook.Chapters.Where(c => c.SortOrder < firstChapter.SortOrder).OrderByDescending(c => c.SortOrder).FirstOrDefault();
-            if (prevChapter != null)
-            {
-                await LoadChapterIntoStreamAsync(prevChapter, clearStream: true);
-            }
+            if (prevChapter != null) await LoadChapterIntoStreamAsync(prevChapter, clearStream: true);
         }
 
         [RelayCommand]
         private async Task NextChapterAsync()
         {
             if (CurrentBook == null || IsLoading || !ReadingStream.Any()) return;
-
-            // 手动下一章：以当前流的【最底部】那章为基准往下找
             var lastNodeId = ReadingStream.Last().ChapterId;
             var lastChapter = CurrentBook.Chapters.FirstOrDefault(c => c.Id == lastNodeId);
             if (lastChapter == null) return;
 
             var nextChapter = CurrentBook.Chapters.Where(c => c.SortOrder > lastChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
-            if (nextChapter != null)
+            if (nextChapter != null) await LoadChapterIntoStreamAsync(nextChapter, clearStream: true);
+        }
+
+        // ==================== 唯一保留的笔记工作台引擎 ====================
+
+        // 【核心净化】：这里仅保留了一套唯一的 IsNoteOverlayVisible 声明，消除了分部类的二义性冲突
+        [ObservableProperty]
+        private bool _isNoteOverlayVisible = false;
+
+        [ObservableProperty]
+        private string _extractTargetParagraph = string.Empty;
+
+        [ObservableProperty]
+        private string _userNoteInput = string.Empty;
+
+        [RelayCommand]
+        private void OpenNoteWorkbench(ReaderChapterNode node)
+        {
+            if (node == null) return;
+            IsMenuVisible = false;
+            ExtractTargetParagraph = node.Content;
+            UserNoteInput = string.Empty;
+            IsNoteOverlayVisible = true;
+        }
+
+        [RelayCommand]
+        private void CloseNoteWorkbench()
+        {
+            IsNoteOverlayVisible = false;
+        }
+
+        [RelayCommand]
+        private async Task SaveNoteAsync(Editor sourceEditor)
+        {
+            if (sourceEditor == null || CurrentBook == null || CurrentChapter == null) return;
+
+            int start = sourceEditor.CursorPosition;
+            int length = sourceEditor.SelectionLength;
+
+            if (length <= 0)
             {
-                await LoadChapterIntoStreamAsync(nextChapter, clearStream: true);
+                await Application.Current.MainPage.DisplayAlert("提示", "请在上方框内滑动光标，选中你要划线的句子", "好的");
+                return;
             }
+
+            if (string.IsNullOrWhiteSpace(UserNoteInput))
+            {
+                await Application.Current.MainPage.DisplayAlert("提示", "笔记内容不能为空", "好的");
+                return;
+            }
+
+            string selectedSentence = sourceEditor.Text.Substring(start, length);
+
+            var note = new BookNote
+            {
+                Id = Guid.NewGuid(),
+                BookId = CurrentBook.Id,
+                ChapterId = CurrentChapter.Id, // 现已不会报错，因为实体契约已修复
+                BookTitle = CurrentBook.Title,
+                SelectedText = selectedSentence,
+                UserComment = UserNoteInput,
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            // await _noteRepository.AddAsync(note); // 真实落地
+
+            await Application.Current.MainPage.DisplayAlert("保存成功", "笔记已记录", "确定");
+            CloseNoteWorkbench();
         }
 
         // ==================== 界面与菜单控制 ====================
@@ -304,24 +353,10 @@ namespace MonoRead.App.ViewModels
 
         // ==================== 排版与主题设置 ====================
         [RelayCommand]
-        private void IncreaseFont()
-        {
-            if (ReaderFontSize < 36)
-            {
-                ReaderFontSize += 2;
-                Preferences.Default.Set("ReaderFontSize", ReaderFontSize);
-            }
-        }
+        private void IncreaseFont() { if (ReaderFontSize < 36) { ReaderFontSize += 2; Preferences.Default.Set("ReaderFontSize", ReaderFontSize); } }
 
         [RelayCommand]
-        private void DecreaseFont()
-        {
-            if (ReaderFontSize > 12)
-            {
-                ReaderFontSize -= 2;
-                Preferences.Default.Set("ReaderFontSize", ReaderFontSize);
-            }
-        }
+        private void DecreaseFont() { if (ReaderFontSize > 12) { ReaderFontSize -= 2; Preferences.Default.Set("ReaderFontSize", ReaderFontSize); } }
 
         [RelayCommand]
         private void ChangeTheme(string themeType)
@@ -346,10 +381,6 @@ namespace MonoRead.App.ViewModels
         }
 
         [RelayCommand]
-        private void ChangeTextColor(string hexColor)
-        {
-            TextPrimaryColor = Color.FromArgb(hexColor);
-            Preferences.Default.Set("ThemeText", hexColor);
-        }
+        private void ChangeTextColor(string hexColor) { TextPrimaryColor = Color.FromArgb(hexColor); Preferences.Default.Set("ThemeText", hexColor); }
     }
 }

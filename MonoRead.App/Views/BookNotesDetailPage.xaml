@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MonoRead.App.Views.BookNotesDetailPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="#F5F5F5">
+    <Grid RowDefinitions="Auto, *">
+        <!-- 导航栏 -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Padding="15,40,20,15" BackgroundColor="#FFFFFF">
+            <Button Grid.Column="0" Text="⬅" Command="{Binding GoBackCommand}" BackgroundColor="Transparent" TextColor="#333333" FontSize="20" />
+            <Label Grid.Column="1" Text="{Binding BookTitle}" FontSize="18" FontAttributes="Bold" TextColor="#333333" VerticalOptions="Center" />
+        </Grid>
+
+        <!-- 笔记按时间倒序列表 -->
+        <CollectionView Grid.Row="1" ItemsSource="{Binding BookNotesList}" SelectionMode="None">
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="20,10" BackgroundColor="#FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 12">
+                        <Grid RowDefinitions="Auto, Auto, Auto" Padding="20">
+                            <!-- 摘录区 -->
+                            <Border Grid.Row="0" BackgroundColor="#F9F9F9" StrokeThickness="0" Padding="15" StrokeShape="RoundRectangle 8">
+                                <Grid ColumnDefinitions="4, *">
+                                    <BoxView Grid.Column="0" Color="#D1A67B" WidthRequest="4" CornerRadius="2" HorizontalOptions="Start" />
+                                    <Label Grid.Column="1" Text="{Binding SelectedText}" FontSize="14" TextColor="#666666" LineHeight="1.5" Margin="10,0,0,0" />
+                                </Grid>
+                            </Border>
+                            <!-- 笔记区 -->
+                            <Label Grid.Row="1" Text="{Binding UserComment}" FontSize="16" TextColor="#333333" LineHeight="1.6" Margin="0,15,0,0" />
+                            <!-- 时间与删除 -->
+                            <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,20,0,0">
+                                <Label Grid.Column="0" Text="{Binding CreatedAt, StringFormat='{0:yyyy-MM-dd HH:mm}'}" FontSize="11" TextColor="#B2B2B2" VerticalOptions="Center" />
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MonoRead.App.Views.NotesPage"
+             x:Name="RootPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="#F5F5F5">
+    <Grid RowDefinitions="Auto, *">
+        <Grid Grid.Row="0" Padding="20,40,20,20" BackgroundColor="#F5F5F5">
+            <Label Text="笔记归档" FontSize="28" FontAttributes="Bold" TextColor="#333333" />
+        </Grid>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding NotedBooks}" SelectionMode="None">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16" Margin="0,100,0,0">
+                    <Label Text="📚" FontSize="72" HorizontalOptions="Center" Opacity="0.5"/>
+                    <Label Text="还没有记录过笔记" FontSize="16" TextColor="#999999" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="20,10" BackgroundColor="#FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 12">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding BindingContext.GoToBookNotesCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid Padding="20" ColumnDefinitions="Auto, *, Auto">
+                            <Border Grid.Column="0" BackgroundColor="#E0E0E0" WidthRequest="40" HeightRequest="56" StrokeThickness="0" StrokeShape="RoundRectangle 4" Margin="0,0,15,0">
+                                <Label Text="📖" FontSize="20" HorizontalOptions="Center" VerticalOptions="Center" />
+                            </Border>
+                            <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                                <Label Text="{Binding BookTitle}" FontSize="18" FontAttributes="Bold" TextColor="#333333" />
+                                <Label Text="{Binding NoteCount, StringFormat='共 {0} 条笔记'}" FontSize="14" TextColor="#999999" Margin="0,5,0,0" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2" Text=">" FontSize="20" TextColor="#CCCCCC" VerticalOptions="Center" FontAttributes="Bold"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>
