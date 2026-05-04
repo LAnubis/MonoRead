@@ -2,12 +2,11 @@
 using CommunityToolkit.Mvvm.Input;
 using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
-using MonoRead.Infrastructure.Logging;
+using MonoRead.Infrastructure.Logging; // 确保引入日志
 using System.Collections.ObjectModel;
 
 namespace MonoRead.App.ViewModels
 {
-    // 【核心修复】：接收上一级页面传来的 BookId 和 BookTitle
     [QueryProperty(nameof(BookIdString), "BookId")]
     [QueryProperty(nameof(BookTitle), "BookTitle")]
     public partial class BookNotesDetailViewModel : ObservableObject
@@ -31,7 +30,6 @@ namespace MonoRead.App.ViewModels
             _noteRepository = noteRepository;
         }
 
-        // 当路由参数 BookIdString 被赋值时，自动触发查询
         partial void OnBookIdStringChanged(string value)
         {
             if (Guid.TryParse(value, out Guid bookId))
@@ -44,35 +42,45 @@ namespace MonoRead.App.ViewModels
         {
             if (IsBusy) return;
             IsBusy = true;
+
             try
             {
-                // 调用仓储层按书籍拉取数据
+                // 1. 异步请求数据库 (非 UI 线程)
                 var notes = await _noteRepository.GetNotesByBookIdAsync(bookId);
 
+                // 2. 将数据装入新的 ObservableCollection，准备进行内存替换
+                var newCollection = new ObservableCollection<BookNote>(notes);
+
+                // 3. 切回主线程进行 UI 渲染
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    NotesList.Clear();
-                    foreach (var note in notes)
-                    {
-                        NotesList.Add(note);
-                    }
+                    // 【核心渲染修复】：直接替换集合实例，只触发 1 次重绘，彻底解决 CollectionView 循环 Add 导致的 Android 崩溃
+                    NotesList = newCollection;
                 });
             }
             catch (Exception ex)
             {
-                LocalLogger.LogError($"加载笔记异常: {ex.Message}");
+                // 【核心架构修复】：捕获原本会导致 async void 闪退的幽灵异常！
+                LocalLogger.LogError($"加载笔记详情失败: {ex.Message}");
+
+                MainThread.BeginInvokeOnMainThread(async () =>
+                {
+                    // 将死因弹窗显示给开发者/用户
+                    await Application.Current.MainPage!.DisplayAlert("数据加载异常", ex.Message, "确定");
+                });
             }
             finally
             {
-                IsBusy = false;
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    IsBusy = false;
+                });
             }
         }
 
-        // 【核心修复】：修复返回按钮失效的问题
         [RelayCommand]
         private async Task GoBackAsync()
         {
-            // ".." 代表出栈，回到上一级
             await Shell.Current.GoToAsync("..");
         }
     }
