@@ -8,7 +8,6 @@ using System.Text.Json;
 
 namespace MonoRead.Core.Entities
 {
-    // 继承 BaseEntity，并实现 INotifyPropertyChanged 驱动 UI 刷新
     public class Book : BaseEntity, INotifyPropertyChanged
     {
         public Guid? FolderId { get; set; }
@@ -52,6 +51,7 @@ namespace MonoRead.Core.Entities
         {
             get
             {
+                // 【防御】：如果没有加载出章节，说明 EF Core 没有 Include
                 if (Chapters == null || !Chapters.Any()) return "未解析";
 
                 int total = Chapters.Count;
@@ -68,12 +68,15 @@ namespace MonoRead.Core.Entities
                             var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
                             if (chapter != null)
                             {
+                                // 假设 SortOrder 是从 0 开始的索引，展示给用户时 +1
                                 current = chapter.SortOrder + 1;
                             }
                         }
                     }
-                    catch { /* 解析失败则回退到第一章 */ }
+                    catch { /* JSON 破损等解析失败情况，静默回退到第一章 */ }
                 }
+
+                // 【核心修复 2】：规范化输出格式
                 return $"{current}章 / 共{total}章";
             }
         }

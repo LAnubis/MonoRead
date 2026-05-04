@@ -1,7 +1,4 @@
 ﻿using MonoRead.Core.Entities;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace MonoRead.Core.Interfaces
 {
@@ -9,9 +6,16 @@ namespace MonoRead.Core.Interfaces
     {
         Task AddAsync(BookNote note);
         Task<List<BookNote>> GetAllNotDeletedAsync();
-        // 【新增】：按特定书籍查询所有非删除状态的笔记
         Task<List<BookNote>> GetNotesByBookIdAsync(Guid bookId);
-        // 在现有接口中补充：
         Task SoftDeleteNotesAsync(IEnumerable<Guid> noteIds);
+
+        // 获取所有被软删除的笔记
+        Task<List<BookNote>> GetDeletedNotesAsync();
+
+        // 【核心新增】：获取所有未被删除，但已失去原书关联的未分类(孤儿)笔记
+        Task<List<BookNote>> GetOrphanNotesAsync();
+
+        Task RestoreNoteAsync(Guid noteId);
+        Task PermanentlyDeleteNoteAsync(Guid noteId);
     }
 }

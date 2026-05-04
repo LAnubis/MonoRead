@@ -1,12 +1,175 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:MonoRead.App.ViewModels"
              x:Class="MonoRead.App.Views.TrashPage"
-             Title="TrashPage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+             x:Name="RootPage"
+             Shell.NavBarIsVisible="False"
+             Shell.TabBarIsVisible="False"
+             BackgroundColor="#F5F5F5">
+
+    <Grid RowDefinitions="Auto, Auto, *">
+
+        <!-- ==================== 顶部导航栏 ==================== -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,40,15,15" BackgroundColor="#FFFFFF">
+            <Grid Grid.Column="0" Padding="10" BackgroundColor="Transparent">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding GoBackCommand}" />
+                </Grid.GestureRecognizers>
+                <Label Text="← 返回" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
+            </Grid>
+            <Label Grid.Column="1" Text="回收站" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center"/>
+
+            <!-- 【核心修复】：将 BoxView 替换为 ContentView，彻底消除 Android 渲染黑块 -->
+            <ContentView Grid.Column="2" WidthRequest="50"/>
+        </Grid>
+        <!-- ... 下方原有代码保持不变 ... -->
+
+        <!-- ==================== Tab 分段选择器 ==================== -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,*" BackgroundColor="#FFFFFF" Padding="0,5,0,0">
+
+            <!-- Tab 1: 书籍 -->
+            <Grid Grid.Column="0" Padding="0,15">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SwitchTabCommand}" CommandParameter="Books" />
+                </Grid.GestureRecognizers>
+
+                <Label Text="已删书籍" FontSize="16" HorizontalOptions="Center" VerticalOptions="Center">
+                    <Label.Triggers>
+                        <!-- 纯天然的触发器：选中时变色加粗，未选中时置灰 -->
+                        <DataTrigger TargetType="Label" Binding="{Binding IsBookTabActive}" Value="True">
+                            <Setter Property="TextColor" Value="#D1A67B" />
+                            <Setter Property="FontAttributes" Value="Bold" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding IsBookTabActive}" Value="False">
+                            <Setter Property="TextColor" Value="#999999" />
+                            <Setter Property="FontAttributes" Value="None" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
+
+                <!-- 底部游标指示器 -->
+                <BoxView HeightRequest="3" WidthRequest="40" CornerRadius="1.5" VerticalOptions="End" HorizontalOptions="Center" Margin="0,0,0,-15">
+                    <BoxView.Triggers>
+                        <DataTrigger TargetType="BoxView" Binding="{Binding IsBookTabActive}" Value="True">
+                            <Setter Property="Color" Value="#D1A67B" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="BoxView" Binding="{Binding IsBookTabActive}" Value="False">
+                            <Setter Property="Color" Value="Transparent" />
+                        </DataTrigger>
+                    </BoxView.Triggers>
+                </BoxView>
+            </Grid>
+
+            <!-- Tab 2: 笔记 -->
+            <Grid Grid.Column="1" Padding="0,15">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SwitchTabCommand}" CommandParameter="Notes" />
+                </Grid.GestureRecognizers>
+
+                <Label Text="已删笔记" FontSize="16" HorizontalOptions="Center" VerticalOptions="Center">
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding IsNoteTabActive}" Value="True">
+                            <Setter Property="TextColor" Value="#D1A67B" />
+                            <Setter Property="FontAttributes" Value="Bold" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding IsNoteTabActive}" Value="False">
+                            <Setter Property="TextColor" Value="#999999" />
+                            <Setter Property="FontAttributes" Value="None" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
+
+                <!-- 底部游标指示器 -->
+                <BoxView HeightRequest="3" WidthRequest="40" CornerRadius="1.5" VerticalOptions="End" HorizontalOptions="Center" Margin="0,0,0,-15">
+                    <BoxView.Triggers>
+                        <DataTrigger TargetType="BoxView" Binding="{Binding IsNoteTabActive}" Value="True">
+                            <Setter Property="Color" Value="#D1A67B" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="BoxView" Binding="{Binding IsNoteTabActive}" Value="False">
+                            <Setter Property="Color" Value="Transparent" />
+                        </DataTrigger>
+                    </BoxView.Triggers>
+                </BoxView>
+            </Grid>
+        </Grid>
+        <BoxView Grid.Row="1" HeightRequest="1" Color="#EEEEEE" VerticalOptions="End" />
+
+        <!-- ==================== 数据瀑布流区域 ==================== -->
+
+        <!-- 书籍列表 -->
+        <CollectionView Grid.Row="2" ItemsSource="{Binding DeletedBooks}" IsVisible="{Binding IsBookTabActive}">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16" Margin="0,100,0,0">
+                    <ActivityIndicator IsRunning="{Binding IsBusy}" Color="#AAAAAA" />
+                    <Label Text="暂无被删除的书籍" FontSize="16" TextColor="#999999">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsBusy}" Value="True">
+                                <Setter Property="IsVisible" Value="False" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="15,10" Padding="15" BackgroundColor="White" StrokeThickness="0" StrokeShape="RoundRectangle 8">
+                        <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="10">
+                            <!-- 确保长书名不越界 -->
+                            <Label Grid.Column="0" Text="{Binding Title}" VerticalOptions="Center" FontSize="16" TextColor="#333333" LineBreakMode="TailTruncation" MaxLines="2" />
+                            <Button Grid.Column="1" Text="恢复" Command="{Binding BindingContext.RestoreBookCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" BackgroundColor="#E0F7FA" TextColor="#00796B" HeightRequest="36" CornerRadius="18" Padding="15,0" />
+                            <Button Grid.Column="2" Text="销毁" Command="{Binding BindingContext.HardDeleteBookCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" BackgroundColor="#FFEBEE" TextColor="#C62828" HeightRequest="36" CornerRadius="18" Padding="15,0" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <!-- 笔记列表 -->
+        <CollectionView Grid.Row="2" ItemsSource="{Binding DeletedNotes}" IsVisible="{Binding IsNoteTabActive}">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16" Margin="0,100,0,0">
+                    <ActivityIndicator IsRunning="{Binding IsBusy}" Color="#AAAAAA" />
+                    <Label Text="暂无被删除的笔记" FontSize="16" TextColor="#999999">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsBusy}" Value="True">
+                                <Setter Property="IsVisible" Value="False" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="15,10" Padding="15" BackgroundColor="White" StrokeThickness="0" StrokeShape="RoundRectangle 8">
+                        <Grid RowDefinitions="Auto, Auto" ColumnDefinitions="*, Auto" RowSpacing="10">
+
+                            <!-- 笔记正文与出处 -->
+                            <VerticalStackLayout Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Spacing="8">
+                                <Label Text="{Binding BookTitle, StringFormat='《{0}》'}" FontSize="12" TextColor="#999999" />
+                                <Label Text="{Binding SelectedText}" FontSize="15" TextColor="#666666" LineBreakMode="TailTruncation" MaxLines="3" />
+                                <!-- 【核心修复】：使用 DataTrigger 完美替代静态方法，安全判断 Null 或空字符串 -->
+                                <Label Text="{Binding UserComment}" FontSize="14" TextColor="#333333">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label" Binding="{Binding UserComment}" Value="{x:Null}">
+                                            <Setter Property="IsVisible" Value="False" />
+                                        </DataTrigger>
+                                        <DataTrigger TargetType="Label" Binding="{Binding UserComment}" Value="">
+                                            <Setter Property="IsVisible" Value="False" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+                            </VerticalStackLayout>
+
+                            <!-- 操作按钮放置在底部右侧 -->
+                            <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="10" HorizontalOptions="End" Margin="0,10,0,0">
+                                <Button Text="恢复" Command="{Binding BindingContext.RestoreNoteCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" BackgroundColor="#E0F7FA" TextColor="#00796B" HeightRequest="32" CornerRadius="16" Padding="12,0" FontSize="12"/>
+                                <Button Text="销毁" Command="{Binding BindingContext.HardDeleteNoteCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" BackgroundColor="#FFEBEE" TextColor="#C62828" HeightRequest="32" CornerRadius="16" Padding="12,0" FontSize="12"/>
+                            </HorizontalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
 </ContentPage>

@@ -52,7 +52,7 @@
                             <TapGestureRecognizer Command="{Binding LoadNextChapterSeamlesslyCommand}" />
                         </Grid.GestureRecognizers>
                         <ActivityIndicator IsRunning="{Binding IsLoadingNext}" Color="{Binding StatusTextColor}" HorizontalOptions="Center" IsVisible="{Binding IsLoadingNext}" />
-                        <Label Text="继续滑动或点击加载下一章" TextColor="{Binding StatusTextColor}" HorizontalOptions="Center" FontSize="12">
+                        <Label Text="点击加载下一章" TextColor="{Binding StatusTextColor}" HorizontalOptions="Center" FontSize="12">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label" Binding="{Binding IsLoadingNext}" Value="True">
                                     <Setter Property="IsVisible" Value="False" />

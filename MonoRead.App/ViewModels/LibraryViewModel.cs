@@ -80,6 +80,7 @@ namespace MonoRead.App.ViewModels
                     }
                 }
 
+                // 此时拿到的是所有书籍的轻量级壳子（不包含 Chapters 集合）
                 var allBooks = await _bookRepository.GetAllBooksAsync();
                 var currentLevelBooks = allBooks
                     .Where(b => !b.IsDeleted && b.FolderId == CurrentFolder?.Id)
@@ -87,13 +88,18 @@ namespace MonoRead.App.ViewModels
 
                 foreach (var b in currentLevelBooks)
                 {
+                    // 【核心修复 3】：精准注水！
+                    // 由于当前书架/文件夹下通常只有几本到几十本书，使用 SQLite 本地查询极快
+                    // 我们在这里显式拉取这几本书的完整形态（带有 Chapters），以激活进度计算公式
+                    var fullBook = await _bookRepository.GetBookWithChaptersAsync(b.Id) ?? b;
+
                     nodes.Add(new LibraryItemNode
                     {
                         IsFolder = false,
-                        Id = b.Id,
-                        Title = b.Title,
-                        Subtitle = b.ProgressText,
-                        OriginalEntity = b,
+                        Id = fullBook.Id,
+                        Title = fullBook.Title,
+                        Subtitle = fullBook.ProgressText, // 此时 fullBook 已包含章节，完美输出进度
+                        OriginalEntity = fullBook,
                         ShowCheckBox = IsEditMode
                     });
                 }

@@ -14,6 +14,7 @@ using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure;
 using MonoRead.Infrastructure.Services;
 using MonoRead.UseCase;
+using MonoRead.Infrastructure.services;
 
 namespace MonoRead.App
 {
@@ -89,8 +90,9 @@ namespace MonoRead.App
             builder.Services.AddTransient<ReaderPage>();
             builder.Services.AddTransient<BookNotesDetailPage>();
             builder.Services.AddTransient<BookNotesDetailViewModel>();
- 
 
+            builder.Services.AddTransient<TrashViewModel>(); 
+            builder.Services.AddTransient<TrashPage>();
 
             // ==================== 数据库自动迁移建表 ====================
             var app = builder.Build();
