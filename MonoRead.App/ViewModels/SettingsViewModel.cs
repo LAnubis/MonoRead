@@ -44,11 +44,18 @@ namespace MonoRead.App.ViewModels
             }
         }
 
-        // 【新增】：关于我们的占位逻辑
+
         [RelayCommand]
         private async Task GoToAboutUsAsync()
         {
-            await Application.Current.MainPage.DisplayAlert("提示", "关于我们页面正在建设中...", "确定");
+            try
+            {
+                await Shell.Current.GoToAsync("AboutUsPage");
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"跳转关于页面失败: {ex.Message}");
+            }
         }
     }
 }
