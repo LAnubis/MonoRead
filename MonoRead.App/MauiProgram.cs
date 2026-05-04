@@ -3,19 +3,17 @@ using Android.Views;
 using Android.Widget;
 using Microsoft.Maui.Handlers;
 using MonoRead.App.Platforms.Android;
-using MonoRead.App.ViewModels; // 用于发送底层消息
+using MonoRead.App.ViewModels;
 #endif
 
 using CommunityToolkit.Maui;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MonoRead.App.ViewModels;
 using MonoRead.App.Views;
 using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure;
 using MonoRead.Infrastructure.Services;
 using MonoRead.UseCase;
-using CommunityToolkit.Mvvm.Messaging;
 
 namespace MonoRead.App
 {
@@ -50,10 +48,8 @@ namespace MonoRead.App
                         // 2. 劫持系统默认的复制悬浮菜单
                         textView.CustomSelectionActionModeCallback = new MonoReadActionModeCallback(textView);
 
-                        // 3. 【核心补足】：拦截被底层 Android 吸收的短按 Click，跨域发送给 MAUI 触发 250ms 防抖！
-                        textView.Click += (sender, e) => {
-                            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new SingleTapMessage());
-                        };
+                        // 3. 【核心修复】：使用 textView.Context 替代 handler.Context，突破 MAUI 接口限制
+                        textView.SetOnTouchListener(new ReadingTouchListener(textView.Context));
                     }
                 });
 #endif
@@ -62,7 +58,8 @@ namespace MonoRead.App
             // ==================== 基础设施与数据库 ====================
             builder.Services.AddDbContext<AppDbContext>(options =>
             {
-                string dbPath = Path.Combine(FileSystem.AppDataDirectory, "monoread.db3");
+                // 使用绝对路径获取存储目录，规避跨平台路径解析差异
+                string dbPath = Path.Combine(Microsoft.Maui.Storage.FileSystem.AppDataDirectory, "monoread.db3");
                 options.UseSqlite($"Data Source={dbPath}");
             });
             builder.Services.AddSingleton<IFileSystemService, FileSystemService>();
@@ -71,6 +68,7 @@ namespace MonoRead.App
             builder.Services.AddScoped<IBookRepository, BookRepository>();
             builder.Services.AddScoped<IFolderRepository, FolderRepository>();
             builder.Services.AddScoped<IBookParsingUseCase, BookParsingUseCase>();
+            builder.Services.AddScoped<IBookNoteRepository, BookNoteRepository>();
 
             // ==================== 视图与 ViewModel 注册 ====================
             // 底部 TabBar 一级主模块
@@ -80,7 +78,8 @@ namespace MonoRead.App
             builder.Services.AddTransient<LibraryViewModel>();
             builder.Services.AddTransient<LibraryPage>();
 
-            builder.Services.AddTransient<NotesPage>(); // 占位
+            builder.Services.AddTransient<NotesViewModel>();
+            builder.Services.AddTransient<NotesPage>();
 
             builder.Services.AddTransient<SettingsViewModel>();
             builder.Services.AddTransient<SettingsPage>();
@@ -88,8 +87,10 @@ namespace MonoRead.App
             // 深度路由二级业务模块
             builder.Services.AddTransient<ReaderViewModel>();
             builder.Services.AddTransient<ReaderPage>();
-
             builder.Services.AddTransient<BookNotesDetailPage>();
+            builder.Services.AddTransient<BookNotesDetailViewModel>();
+ 
+
 
             // ==================== 数据库自动迁移建表 ====================
             var app = builder.Build();

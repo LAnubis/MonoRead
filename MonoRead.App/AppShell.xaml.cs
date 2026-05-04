@@ -11,6 +11,9 @@ namespace MonoRead.App
             Routing.RegisterRoute(nameof(ReaderPage), typeof(ReaderPage));
             Routing.RegisterRoute("TrashPage", typeof(TrashPage));
             Routing.RegisterRoute(nameof(BookNotesDetailPage), typeof(BookNotesDetailPage));
+            // 确保深层页面被注册在路由字典中
+            Routing.RegisterRoute(nameof(Views.ReaderPage), typeof(Views.ReaderPage));
+            Routing.RegisterRoute(nameof(Views.BookNotesDetailPage), typeof(Views.BookNotesDetailPage));
         }
     }
 }

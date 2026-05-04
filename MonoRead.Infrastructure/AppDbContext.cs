@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using MonoRead.Core.Entities;
 using System;
 using System.Collections.Generic;
+using System.Linq; // 确保引入 Linq
 using System.Text;
 
 namespace MonoRead.Infrastructure
@@ -14,7 +15,9 @@ namespace MonoRead.Infrastructure
         public DbSet<Folder> Folders => Set<Folder>();
         public DbSet<Book> Books => Set<Book>();
         public DbSet<BookChapter> BookChapters => Set<BookChapter>();
-        public DbSet<HighlightNote> HighlightNotes => Set<HighlightNote>();
+
+        // 【核心修复 1】：将旧的 HighlightNotes 替换为全局统一的 BookNotes
+        public DbSet<BookNote> BookNotes => Set<BookNote>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -31,7 +34,6 @@ namespace MonoRead.Infrastructure
             }
 
             // 2. 显式配置外键级联删除策略为 Restrict
-            // 防止删除书籍时导致笔记被物理级联删除
             foreach (var relationship in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()))
             {
                 relationship.DeleteBehavior = DeleteBehavior.Restrict;

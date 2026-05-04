@@ -1,14 +1,12 @@
 ﻿#if ANDROID
 using Android.Views;
 using Android.Widget;
-using Microsoft.Maui.ApplicationModel;
 using CommunityToolkit.Mvvm.Messaging;
+using MonoRead.App.ViewModels; // 确保跨域消息能被正确找到
 
 namespace MonoRead.App.Platforms.Android;
 
-// 定义跨域传输的选中文字消息
-public record TextSelectedMessage(string SelectedText);
-
+// ================== 原生文本悬浮菜单劫持器 ==================
 public class MonoReadActionModeCallback : Java.Lang.Object, ActionMode.ICallback
 {
     private readonly TextView _textView;
@@ -20,14 +18,14 @@ public class MonoReadActionModeCallback : Java.Lang.Object, ActionMode.ICallback
 
     public bool OnCreateActionMode(ActionMode mode, IMenu menu)
     {
-        // 1. 净化：清空系统自带的（全选、Web搜索、分享等杂乱功能）
-        menu?.Clear();
+        // 核心拦截：系统一旦决定选词，立马发射消息，告诉 ViewModel 阻断 250ms 的菜单呼出倒计时！
+        WeakReferenceMessenger.Default.Send(new TextSelectionStartedMessage());
 
-        // 2. 注入：符合产品 MVP 定义的三个极简操作
+        menu?.Clear();
         menu?.Add(0, 1, 0, "划线");
         menu?.Add(0, 2, 1, "写笔记");
         menu?.Add(0, 3, 2, "复制");
-        return true; // 返回 true 表示拦截成功
+        return true;
     }
 
     public bool OnPrepareActionMode(ActionMode mode, IMenu menu) => false;
@@ -36,28 +34,39 @@ public class MonoReadActionModeCallback : Java.Lang.Object, ActionMode.ICallback
     {
         if (mode == null || item == null) return false;
 
-        // 获取当前水滴光标真实选中的文字
-        int min = System.Math.Max(0, System.Math.Min(_textView.SelectionStart, _textView.SelectionEnd));
-        int max = System.Math.Max(0, System.Math.Max(_textView.SelectionStart, _textView.SelectionEnd));
-        string selectedText = _textView.TextFormatted?.SubSequenceFormatted(min, max)?.ToString() ?? string.Empty;
+        int start = _textView.SelectionStart;
+        int end = _textView.SelectionEnd;
 
-        if (string.IsNullOrWhiteSpace(selectedText)) return true;
+        int min = System.Math.Max(0, System.Math.Min(start, end));
+        int max = System.Math.Max(0, System.Math.Max(start, end));
+
+        string fullText = _textView.Text ?? string.Empty;
+        string selectedText = string.Empty;
+
+        if (fullText.Length > 0 && max > min && max <= fullText.Length)
+        {
+            selectedText = fullText.Substring(min, max - min);
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            mode.Finish();
+            return true;
+        }
 
         switch (item.ItemId)
         {
-            case 1: // 划线功能 (直接沉淀资产)
-                // TODO: 发送静默划线落盘消息
-                mode.Finish(); // 关闭系统悬浮条
+            case 1:
+                mode.Finish();
                 return true;
 
-            case 2: // 写笔记 (调起 UI 工作台)
-                // 将选中的文字发送回 MAUI 的 ViewModel 层
+            case 2: // 写笔记
                 WeakReferenceMessenger.Default.Send(new TextSelectedMessage(selectedText));
                 mode.Finish();
                 return true;
 
-            case 3: // 复制
-                Clipboard.Default.SetTextAsync(selectedText);
+            case 3: // 复制 (修复：增加 DataTransfer 绝对路径)
+                global::Microsoft.Maui.ApplicationModel.DataTransfer.Clipboard.Default.SetTextAsync(selectedText);
                 mode.Finish();
                 return true;
 
@@ -67,5 +76,48 @@ public class MonoReadActionModeCallback : Java.Lang.Object, ActionMode.ICallback
     }
 
     public void OnDestroyActionMode(ActionMode mode) { }
+}
+
+// ================== 原生手势精准拦截器 ==================
+// 修复：使用 global::Android 强制突破命名空间冲突
+public class ReadingTouchListener : Java.Lang.Object, global::Android.Views.View.IOnTouchListener
+{
+    private readonly GestureDetector _gestureDetector;
+
+    public ReadingTouchListener(global::Android.Content.Context context)
+    {
+        _gestureDetector = new GestureDetector(context, new ReadingGestureListener());
+    }
+
+    public bool OnTouch(global::Android.Views.View v, MotionEvent e)
+    {
+        // 先让 GestureDetector 审问这个触摸事件，截断原生双击
+        if (_gestureDetector.OnTouchEvent(e))
+        {
+            return true;
+        }
+        return false;
+    }
+}
+
+public class ReadingGestureListener : GestureDetector.SimpleOnGestureListener
+{
+    public override bool OnSingleTapConfirmed(MotionEvent e)
+    {
+        // 强行指定绝对路径，无视命名空间丢失问题
+        CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(
+            new global::MonoRead.App.ViewModels.MenuToggleRequestedMessage()
+        );
+        return true;
+    }
+
+    public override bool OnDoubleTap(MotionEvent e)
+    {
+        // 强行指定绝对路径
+        CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(
+            new global::MonoRead.App.ViewModels.MenuToggleRequestedMessage()
+        );
+        return true;
+    }
 }
 #endif

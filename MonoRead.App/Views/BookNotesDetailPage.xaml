@@ -1,36 +1,67 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:MonoRead.App.ViewModels"
              x:Class="MonoRead.App.Views.BookNotesDetailPage"
+             x:Name="RootPage"
              Shell.NavBarIsVisible="False"
+             Shell.TabBarIsVisible="False"
              BackgroundColor="#F5F5F5">
-    <Grid RowDefinitions="Auto, *">
-        <!-- 导航栏 -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Padding="15,40,20,15" BackgroundColor="#FFFFFF">
-            <Button Grid.Column="0" Text="⬅" Command="{Binding GoBackCommand}" BackgroundColor="Transparent" TextColor="#333333" FontSize="20" />
-            <Label Grid.Column="1" Text="{Binding BookTitle}" FontSize="18" FontAttributes="Bold" TextColor="#333333" VerticalOptions="Center" />
-        </Grid>
 
-        <!-- 笔记按时间倒序列表 -->
-        <CollectionView Grid.Row="1" ItemsSource="{Binding BookNotesList}" SelectionMode="None">
+    <Grid RowDefinitions="Auto, *">
+
+        <!-- ==================== 顶部导航栏 ==================== -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,40,15,15" BackgroundColor="#FFFFFF">
+            <!-- 修复后的返回按钮绑定 -->
+            <Grid Grid.Column="0" Padding="10" BackgroundColor="Transparent">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding GoBackCommand}" />
+                </Grid.GestureRecognizers>
+                <Label Text="← 返回" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
+            </Grid>
+            <!-- 动态接收的书名 -->
+            <Label Grid.Column="1" Text="{Binding BookTitle}" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1" />
+        </Grid>
+        <BoxView Grid.Row="0" HeightRequest="1" Color="#EEEEEE" VerticalOptions="End" />
+
+        <!-- ==================== 笔记瀑布流 ==================== -->
+        <CollectionView Grid.Row="1" ItemsSource="{Binding NotesList}" SelectionMode="None">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16" Margin="0,100,0,0">
+                    <ActivityIndicator IsRunning="{Binding IsBusy}" Color="#AAAAAA" />
+
+                    <!-- 【核心修复】：移除错误的 Converter，改为使用绝对安全的 DataTrigger -->
+                    <Label Text="空空如也" FontSize="16" TextColor="#999999">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding IsBusy}" Value="True">
+                                <Setter Property="IsVisible" Value="False" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
             <CollectionView.ItemTemplate>
                 <DataTemplate>
-                    <Border Margin="20,10" BackgroundColor="#FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 12">
-                        <Grid RowDefinitions="Auto, Auto, Auto" Padding="20">
-                            <!-- 摘录区 -->
-                            <Border Grid.Row="0" BackgroundColor="#F9F9F9" StrokeThickness="0" Padding="15" StrokeShape="RoundRectangle 8">
-                                <Grid ColumnDefinitions="4, *">
-                                    <BoxView Grid.Column="0" Color="#D1A67B" WidthRequest="4" CornerRadius="2" HorizontalOptions="Start" />
-                                    <Label Grid.Column="1" Text="{Binding SelectedText}" FontSize="14" TextColor="#666666" LineHeight="1.5" Margin="10,0,0,0" />
-                                </Grid>
-                            </Border>
-                            <!-- 笔记区 -->
-                            <Label Grid.Row="1" Text="{Binding UserComment}" FontSize="16" TextColor="#333333" LineHeight="1.6" Margin="0,15,0,0" />
-                            <!-- 时间与删除 -->
-                            <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,20,0,0">
-                                <Label Grid.Column="0" Text="{Binding CreatedAt, StringFormat='{0:yyyy-MM-dd HH:mm}'}" FontSize="11" TextColor="#B2B2B2" VerticalOptions="Center" />
-                            </Grid>
-                        </Grid>
+                    <!-- 单条笔记卡片 -->
+                    <Border Margin="20,10" BackgroundColor="#FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 12" Padding="20">
+                        <VerticalStackLayout Spacing="15">
+
+                            <!-- 划线的原文金句 -->
+                            <HorizontalStackLayout Spacing="10">
+                                <BoxView WidthRequest="4" Color="#D1A67B" CornerRadius="2" VerticalOptions="FillAndExpand" />
+                                <Label Text="{Binding SelectedText}" FontSize="16" TextColor="#666666" LineHeight="1.6" />
+                            </HorizontalStackLayout>
+
+                            <BoxView HeightRequest="1" Color="#F5F5F5" />
+
+                            <!-- 用户的批注 -->
+                            <Label Text="{Binding UserComment}" FontSize="16" TextColor="#333333" />
+
+                            <!-- 时间戳 -->
+                            <Label Text="{Binding CreatedAt, StringFormat='{0:yyyy-MM-dd HH:mm}'}" FontSize="12" TextColor="#AAAAAA" HorizontalOptions="End" />
+                        </VerticalStackLayout>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>

@@ -8,10 +8,10 @@ using System.Collections.ObjectModel;
 
 namespace MonoRead.App.ViewModels
 {
-    // ==================== 跨域消息实体定义 ====================
-    public record SingleTapMessage();                  // 收到原生极短单击
-    public record TextSelectionStartedMessage();       // 原生划线选词启动了（长按/双击被触发）
-    public record TextSelectedMessage(string SelectedText); // 点击了“写笔记”
+    // ==================== 跨域消息实体定义 (全局共享) ====================
+    public record MenuToggleRequestedMessage();             // 请求呼出/隐藏菜单
+    public record TextSelectionStartedMessage();            // 原生长按选词启动了
+    public record TextSelectedMessage(string SelectedText); // 用户点击了浮窗的“写笔记”
 
     public class ReaderChapterNode
     {
@@ -29,6 +29,7 @@ namespace MonoRead.App.ViewModels
     public partial class ReaderViewModel : ObservableObject
     {
         private readonly IBookRepository _bookRepository;
+        private readonly IBookNoteRepository _noteRepository;
 
         // ==================== 状态机 ====================
         [ObservableProperty] private bool _isLoading;
@@ -60,32 +61,30 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private string _extractTargetParagraph = string.Empty;
         [ObservableProperty] private string _userNoteInput = string.Empty;
 
-        // ==================== 防抖锁 ====================
-        private CancellationTokenSource? _tapCancelToken;
-        private bool _isWaitingForTap = false;
+        private DateTime _lastToggleTime = DateTime.MinValue;
 
-        public ReaderViewModel(IBookRepository bookRepository)
+        public ReaderViewModel(IBookRepository bookRepository, IBookNoteRepository noteRepository)
         {
             _bookRepository = bookRepository;
+            _noteRepository = noteRepository;
 
-            // 1. 监听 Android 原生底层发来的单击事件
-            WeakReferenceMessenger.Default.Register<SingleTapMessage>(this, async (r, m) =>
+            // 1. 监听 Android 底层拦截到的单击/双击，或 XAML 空白处的点击
+            WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) =>
             {
-                await HandleSingleTapWithDelayAsync();
+                HandleMenuToggleRequest();
             });
 
-            // 2. 【核心拦截】：一旦原生系统唤起了划线菜单，说明用户在双击/长按，立即取消呼出工具栏
+            // 2. 监听长按选词开始：确保系统选词时，我们底部的设置菜单别跑出来碍事
             WeakReferenceMessenger.Default.Register<TextSelectionStartedMessage>(this, (r, m) =>
             {
-                CancelPendingTap();
+                MainThread.BeginInvokeOnMainThread(() => IsMenuVisible = false);
             });
 
-            // 3. 监听选中文字，弹出笔记工作台
+            // 3. 监听选中文字：弹出笔记工作台
             WeakReferenceMessenger.Default.Register<TextSelectedMessage>(this, (r, m) =>
             {
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    CancelPendingTap(); // 确保工具栏绝对不闪现
                     if (!string.IsNullOrWhiteSpace(m.SelectedText))
                     {
                         ExtractTargetParagraph = m.SelectedText;
@@ -249,54 +248,29 @@ namespace MonoRead.App.ViewModels
 
         // ==================== 极简触控与调度 ====================
 
-        private void CancelPendingTap()
-        {
-            _tapCancelToken?.Cancel();
-            _isWaitingForTap = false;
-        }
-
-        // 绑定给 XAML 里外层空白区域以及关闭按钮的通用点击处理
         [RelayCommand]
-        private async Task ProcessTapAsync()
+        private void ProcessTap()
         {
-            await HandleSingleTapWithDelayAsync();
+            HandleMenuToggleRequest();
         }
 
-        // 核心防抖判定逻辑
-        private async Task HandleSingleTapWithDelayAsync()
+        private void HandleMenuToggleRequest()
         {
-            // 如果笔记面板开着，优先关掉
-            if (IsNoteOverlayVisible)
+            MainThread.BeginInvokeOnMainThread(() =>
             {
-                MainThread.BeginInvokeOnMainThread(() => IsNoteOverlayVisible = false);
-                return;
-            }
-
-            // 如果正在等，说明点第二下了（双击），直接取消呼出工具栏
-            if (_isWaitingForTap)
-            {
-                CancelPendingTap();
-                return;
-            }
-
-            _isWaitingForTap = true;
-            _tapCancelToken = new CancellationTokenSource();
-
-            try
-            {
-                // 等待 250ms
-                await Task.Delay(250, _tapCancelToken.Token);
-
-                if (_isWaitingForTap)
+                // 如果笔记面板开着，优先把它关掉
+                if (IsNoteOverlayVisible)
                 {
-                    _isWaitingForTap = false;
-                    MainThread.BeginInvokeOnMainThread(() => ToggleMenu());
+                    IsNoteOverlayVisible = false;
+                    return;
                 }
-            }
-            catch (TaskCanceledException)
-            {
-                // 被双击或原生选词打断，静默不呼出菜单
-            }
+
+                // 防抖（350ms）：忽略手抖或双击造成的连续请求
+                if ((DateTime.Now - _lastToggleTime).TotalMilliseconds < 350) return;
+
+                _lastToggleTime = DateTime.Now;
+                IsMenuVisible = !IsMenuVisible;
+            });
         }
 
         [RelayCommand]
@@ -319,7 +293,7 @@ namespace MonoRead.App.ViewModels
             {
                 Id = Guid.NewGuid(),
                 BookId = CurrentBook.Id,
-                ChapterId = CurrentChapter.Id,
+                ChapterId = CurrentChapter.Id, // 补齐章节关联
                 BookTitle = CurrentBook.Title,
                 SelectedText = ExtractTargetParagraph,
                 UserComment = UserNoteInput,
@@ -327,15 +301,14 @@ namespace MonoRead.App.ViewModels
                 IsDeleted = false
             };
 
-            // 【待解耦】：如需真实落盘，取消此行注释并在上方注入 IBookNoteRepository
-            // await _noteRepository.AddAsync(note); 
+            // 物理落盘
+            await _noteRepository.AddAsync(note);
 
             await Application.Current.MainPage!.DisplayAlert("保存成功", "笔记已记录", "确定");
             CloseNoteWorkbench();
         }
 
         // ==================== 界面与菜单控制 ====================
-        private void ToggleMenu() => IsMenuVisible = !IsMenuVisible;
         [RelayCommand] private async Task GoBackAsync() => await Shell.Current.GoToAsync("..");
         [RelayCommand] private void ToggleToc() { IsTocVisible = !IsTocVisible; if (IsTocVisible) IsMenuVisible = false; }
         [RelayCommand] private async Task SelectChapterAsync(BookChapter chapter) { if (chapter == null) return; IsTocVisible = false; IsMenuVisible = false; await LoadChapterIntoStreamAsync(chapter, clearStream: true); }
