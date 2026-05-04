@@ -19,27 +19,23 @@
                             SelectionMode="None">
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <!-- 底板容器：点击段落外的空白边缘直接呼出菜单 (传 null) -->
+                        <!-- 兜底：处理页面边缘、空白区域的点击，用于呼出/隐藏阅读菜单 -->
                         <VerticalStackLayout Padding="20,40,20,40">
                             <VerticalStackLayout.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding BindingContext.ProcessTapCommand, Source={x:Reference RootPage}}" CommandParameter="{x:Null}" />
+                                <TapGestureRecognizer Command="{Binding BindingContext.ProcessTapCommand, Source={x:Reference RootPage}}" />
                             </VerticalStackLayout.GestureRecognizers>
 
                             <Label Text="{Binding Title}" FontSize="28" FontAttributes="Bold" TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference RootPage}}" Margin="0,0,0,30" />
 
-                            <!-- 【核心进化】：段落级碎片化渲染，彻底解决工作台寻字难痛点 -->
                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Paragraphs}" Spacing="15">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate>
+                                        <!-- 【极简核心】：彻底剥离 MAUI 手势。仅保留 StyleClass="ReadingText"，由 MauiProgram 注入 Android 原生能力 -->
                                         <Label Text="{Binding .}" 
+                                               StyleClass="ReadingText"
                                                FontSize="{Binding BindingContext.ReaderFontSize, Source={x:Reference RootPage}}" 
                                                LineHeight="1.8" 
-                                               TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference RootPage}}">
-                                            <!-- 每个段落独立捕获点击事件 -->
-                                            <Label.GestureRecognizers>
-                                                <TapGestureRecognizer Command="{Binding BindingContext.ProcessTapCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" />
-                                            </Label.GestureRecognizers>
-                                        </Label>
+                                               TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference RootPage}}" />
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
                             </VerticalStackLayout>
@@ -49,7 +45,7 @@
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
 
-                <!-- 双重兜底触底加载 -->
+                <!-- 触底兜底加载区域 -->
                 <CollectionView.Footer>
                     <Grid Padding="20" BackgroundColor="Transparent">
                         <Grid.GestureRecognizers>
@@ -77,10 +73,10 @@
 
         <!-- ==================== 图层 2：悬浮设置菜单栏 ==================== -->
         <Grid RowDefinitions="Auto, *, Auto" IsVisible="{Binding IsMenuVisible}" BackgroundColor="Transparent">
-            <!-- 退出菜单 -->
+            <!-- 退出菜单的透明遮罩 -->
             <Grid Grid.Row="1" BackgroundColor="Transparent">
                 <Grid.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding ProcessTapCommand}" CommandParameter="{x:Null}" />
+                    <TapGestureRecognizer Command="{Binding ProcessTapCommand}" />
                 </Grid.GestureRecognizers>
             </Grid>
 
@@ -99,13 +95,14 @@
                         </HorizontalStackLayout>
                     </Grid>
                     <BoxView HeightRequest="1" Color="#33FFFFFF" />
-                    <!-- 颜色与字体设置项保持不变... -->
+                    <!-- 主题切换 -->
                     <Grid ColumnDefinitions="*, *, *">
                         <Button Grid.Column="0" Text="日间" Command="{Binding ChangeThemeCommand}" CommandParameter="Day" BackgroundColor="#FFFFFF" TextColor="#333333" CornerRadius="20" Margin="5,0"/>
                         <Button Grid.Column="1" Text="护眼" Command="{Binding ChangeThemeCommand}" CommandParameter="EyeCare" BackgroundColor="#F4ECD8" TextColor="#3E3222" CornerRadius="20" Margin="5,0"/>
                         <Button Grid.Column="2" Text="夜间" Command="{Binding ChangeThemeCommand}" CommandParameter="Night" BackgroundColor="#1A1A1C" TextColor="#999999" CornerRadius="20" Margin="5,0"/>
                     </Grid>
                     <BoxView HeightRequest="1" Color="#33FFFFFF" />
+                    <!-- 字号设置 -->
                     <Grid ColumnDefinitions="Auto, *, Auto, *, Auto">
                         <Label Grid.Column="0" Text="A-" FontSize="16" TextColor="White" VerticalOptions="Center" />
                         <Button Grid.Column="1" Text="缩小" Command="{Binding DecreaseFontCommand}" BackgroundColor="#33FFFFFF" TextColor="White" HeightRequest="40" CornerRadius="20" Margin="10,0"/>
@@ -117,35 +114,31 @@
             </Border>
         </Grid>
 
-        <!-- ==================== 图层 3：全屏目录面板 (简化省略，使用您现有的即可) ==================== -->
-
-        <!-- ==================== 图层 4：降维打击的极简摘录工作台 ==================== -->
+        <!-- ==================== 图层 4：原生联动摘录工作台 ==================== -->
         <Grid RowDefinitions="Auto, *, Auto, Auto" IsVisible="{Binding IsNoteOverlayVisible}" BackgroundColor="#FDFDFD">
 
             <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,40,15,15" BackgroundColor="#FFFFFF">
                 <Button Grid.Column="0" Text="取消" Command="{Binding CloseNoteWorkbenchCommand}" BackgroundColor="Transparent" TextColor="#666666" />
                 <Label Grid.Column="1" Text="写笔记" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center" />
-                <Button Grid.Column="2" Text="保存" Command="{Binding SaveNoteCommand}" CommandParameter="{Binding Source={x:Reference ExtractSourceEditor}}" BackgroundColor="Transparent" TextColor="#D1A67B" FontAttributes="Bold" />
+                <Button Grid.Column="2" Text="保存" Command="{Binding SaveNoteCommand}" BackgroundColor="Transparent" TextColor="#D1A67B" FontAttributes="Bold" />
             </Grid>
             <BoxView Grid.Row="0" HeightRequest="1" Color="#EEEEEE" VerticalOptions="End" />
 
-            <!-- 【体验质变】：现在这里只会显示你双击的那一小段（几句话），选词变得无比轻松 -->
             <Grid Grid.Row="1" Padding="20">
-                <Label Text="1. 在下方文字中拖动水滴光标选中需要划线的句子：" FontSize="12" TextColor="#999999" VerticalOptions="Start" />
+                <Label Text="你已选中以下金句：" FontSize="12" TextColor="#999999" VerticalOptions="Start" />
 
-                <Editor x:Name="ExtractSourceEditor" 
-                        Text="{Binding ExtractTargetParagraph}" 
-                        IsReadOnly="True" 
-                        FontSize="18" 
-                        
-                        TextColor="#666666" 
-                        Margin="0,35,0,0" 
-                        VerticalOptions="FillAndExpand" />
+                <!-- 原生选词完毕后的纯净展示 -->
+                <Label Text="{Binding ExtractTargetParagraph}" 
+                       FontSize="18" 
+                       TextColor="#666666" 
+                       LineHeight="1.5"
+                       Margin="0,25,0,0" 
+                       VerticalOptions="Start" />
             </Grid>
 
             <Border Grid.Row="2" BackgroundColor="#FFFFFF" Stroke="#DDDDDD" StrokeThickness="1" StrokeShape="RoundRectangle 8" Padding="15" Margin="20,0,20,30" HeightRequest="150">
                 <Editor Text="{Binding UserNoteInput}" 
-                        Placeholder="2. 记录你的感悟..." 
+                        Placeholder="记录你的感悟..." 
                         PlaceholderColor="#CCCCCC" 
                         FontSize="16" 
                         TextColor="#333333" 
