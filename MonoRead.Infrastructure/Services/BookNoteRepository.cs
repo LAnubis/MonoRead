@@ -39,5 +39,22 @@ namespace MonoRead.Infrastructure.Services
                 .OrderByDescending(n => n.CreatedAt)
                 .ToListAsync();
         }
+        public async Task SoftDeleteNotesAsync(IEnumerable<Guid> noteIds)
+        {
+            // 拉取需要删除的实体
+            var notesToDelete = await _context.BookNotes
+                .Where(n => noteIds.Contains(n.Id))
+                .ToListAsync();
+
+            foreach (var note in notesToDelete)
+            {
+                note.IsDeleted = true;
+                // 配合需求文档 4.4 节：设定 DeletedAt 为当前时间，移入回收站
+                // note.DeletedAt = DateTime.UtcNow; // 如果你的 BaseEntity 有这个字段请解除注释
+            }
+
+            // 统一提交事务，此时 AppDbContext 拦截器会自动更新 UpdatedAt
+            await _context.SaveChangesAsync();
+        }
     }
 }

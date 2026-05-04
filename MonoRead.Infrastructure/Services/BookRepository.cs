@@ -91,5 +91,47 @@ namespace MonoRead.Infrastructure.Services
             _dbContext.Entry(book).State = EntityState.Deleted;
             await _dbContext.SaveChangesAsync();
         }
+        public async Task<bool> HasActiveNotesAsync(Guid bookId)
+        {
+            // 查询是否有关联且未被软删除的笔记
+            return await _dbContext.BookNotes
+                .AnyAsync(n => n.BookId == bookId && !n.IsDeleted);
+        }
+
+        public async Task ArchiveBookSafelyAsync(Guid bookId, bool archiveNotes)
+        {
+            var book = await _dbContext.Books.FindAsync(bookId);
+            if (book == null) return;
+
+            // 1. 书籍软删除
+            book.IsDeleted = true;
+            // book.DeletedAt = DateTime.UtcNow; // 根据 BaseEntity 是否有此字段选用
+
+            // 2. 获取该书所有未软删的笔记进行状态扭转
+            var relatedNotes = await _dbContext.BookNotes
+                .Where(n => n.BookId == bookId && !n.IsDeleted)
+                .ToListAsync();
+
+            if (relatedNotes.Any())
+            {
+                foreach (var note in relatedNotes)
+                {
+                    if (archiveNotes)
+                    {
+                        // 连带软删除：陪葬进回收站
+                        note.IsDeleted = true;
+                        // note.DeletedAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        // 仅删书籍，笔记保留：打上孤儿（未分类）标记
+                        note.IsOrphan = true;
+                    }
+                }
+            }
+
+            // 3. 统一保存：EF Core 会在一个事务中原子性地处理这些变更，确保不会因为异常导致数据断层
+            await _dbContext.SaveChangesAsync();
+        }
     }
 }

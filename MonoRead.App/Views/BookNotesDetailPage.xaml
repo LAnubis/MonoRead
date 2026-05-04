@@ -8,29 +8,27 @@
              Shell.TabBarIsVisible="False"
              BackgroundColor="#F5F5F5">
 
-    <Grid RowDefinitions="Auto, *">
+    <Grid RowDefinitions="Auto, *, Auto">
 
         <!-- ==================== 顶部导航栏 ==================== -->
         <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,40,15,15" BackgroundColor="#FFFFFF">
-            <!-- 修复后的返回按钮绑定 -->
             <Grid Grid.Column="0" Padding="10" BackgroundColor="Transparent">
                 <Grid.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding GoBackCommand}" />
                 </Grid.GestureRecognizers>
                 <Label Text="← 返回" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
             </Grid>
-            <!-- 动态接收的书名 -->
             <Label Grid.Column="1" Text="{Binding BookTitle}" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1" />
+            <Button Grid.Column="2" Text="{Binding ManageButtonText}" Command="{Binding ToggleManageModeCommand}" BackgroundColor="Transparent" TextColor="#D1A67B" FontAttributes="Bold" />
         </Grid>
         <BoxView Grid.Row="0" HeightRequest="1" Color="#EEEEEE" VerticalOptions="End" />
 
         <!-- ==================== 笔记瀑布流 ==================== -->
         <CollectionView Grid.Row="1" ItemsSource="{Binding NotesList}" SelectionMode="None">
+
             <CollectionView.EmptyView>
                 <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16" Margin="0,100,0,0">
                     <ActivityIndicator IsRunning="{Binding IsBusy}" Color="#AAAAAA" />
-
-                    <!-- 【核心修复】：移除错误的 Converter，改为使用绝对安全的 DataTrigger -->
                     <Label Text="空空如也" FontSize="16" TextColor="#999999">
                         <Label.Triggers>
                             <DataTrigger TargetType="Label" Binding="{Binding IsBusy}" Value="True">
@@ -38,33 +36,71 @@
                             </DataTrigger>
                         </Label.Triggers>
                     </Label>
-
                 </VerticalStackLayout>
             </CollectionView.EmptyView>
 
             <CollectionView.ItemTemplate>
                 <DataTemplate>
-                    <!-- 单条笔记卡片 -->
                     <Border Margin="20,10" BackgroundColor="#FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 12" Padding="20">
-                        <VerticalStackLayout Spacing="15">
+                        <!-- 整块卡片的点击劫持（仅在管理模式生效） -->
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding BindingContext.ToggleItemSelectionCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
 
-                            <!-- 划线的原文金句 -->
-                            <HorizontalStackLayout Spacing="10">
-                                <BoxView WidthRequest="4" Color="#D1A67B" CornerRadius="2" VerticalOptions="FillAndExpand" />
-                                <Label Text="{Binding SelectedText}" FontSize="16" TextColor="#666666" LineHeight="1.6" />
-                            </HorizontalStackLayout>
+                        <!-- 外层 Grid：控制复选框与笔记主体的左右布局 -->
+                        <Grid ColumnDefinitions="Auto, *">
 
-                            <BoxView HeightRequest="1" Color="#F5F5F5" />
+                            <!-- 复选框 (绑定 IsManageMode 控制显隐) -->
+                            <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" VerticalOptions="Center" Margin="0,0,15,0" Color="#D1A67B">
+                                <CheckBox.IsVisible>
+                                    <Binding Path="BindingContext.IsManageMode" Source="{x:Reference RootPage}" />
+                                </CheckBox.IsVisible>
+                            </CheckBox>
 
-                            <!-- 用户的批注 -->
-                            <Label Text="{Binding UserComment}" FontSize="16" TextColor="#333333" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="15">
 
-                            <!-- 时间戳 -->
-                            <Label Text="{Binding CreatedAt, StringFormat='{0:yyyy-MM-dd HH:mm}'}" FontSize="12" TextColor="#AAAAAA" HorizontalOptions="End" />
-                        </VerticalStackLayout>
+                                <!-- 【核心布局重构】：使用 Grid 替代 HorizontalStackLayout，强制 Label 认识屏幕边界 -->
+                                <Grid ColumnDefinitions="Auto, *" ColumnSpacing="10">
+                                    <!-- 竖线装饰 -->
+                                    <BoxView Grid.Column="0" WidthRequest="4" Color="#D1A67B" CornerRadius="2" VerticalOptions="Fill" />
+                                    <!-- 划线原文：追加 LineBreakMode="WordWrap" -->
+                                    <Label Grid.Column="1" 
+                                           Text="{Binding Note.SelectedText}" 
+                                           FontSize="16" 
+                                           TextColor="#666666" 
+                                           LineHeight="1.6" 
+                                           LineBreakMode="WordWrap" />
+                                </Grid>
+
+                                <BoxView HeightRequest="1" Color="#F5F5F5" />
+
+                                <!-- 用户批注：同样确保换行模式开启 -->
+                                <Label Text="{Binding Note.UserComment}" 
+                                       FontSize="16" 
+                                       TextColor="#333333" 
+                                       LineBreakMode="WordWrap" />
+
+                                <!-- 时间戳 -->
+                                <Label Text="{Binding Note.CreatedAt, StringFormat='{0:yyyy-MM-dd HH:mm}'}" FontSize="12" TextColor="#AAAAAA" HorizontalOptions="End" />
+                            </VerticalStackLayout>
+                        </Grid>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
+
+        <!-- ==================== 底部删除操作台 ==================== -->
+        <Grid Grid.Row="2" BackgroundColor="#FFFFFF" Padding="20,15,20,35" 
+              IsVisible="{Binding IsManageMode}">
+            <BoxView HeightRequest="1" Color="#EEEEEE" VerticalOptions="Start" Margin="-20,-15,-20,0" />
+
+            <Button Text="删除选中笔记" 
+                    Command="{Binding DeleteSelectedNotesCommand}" 
+                    BackgroundColor="#E57373" 
+                    TextColor="White" 
+                    FontAttributes="Bold" 
+                    CornerRadius="25" 
+                    HeightRequest="50"/>
+        </Grid>
     </Grid>
 </ContentPage>

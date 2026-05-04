@@ -13,5 +13,7 @@ namespace MonoRead.Core.Entities
         public string SelectedText { get; set; } = string.Empty; // 划线摘录的句子
         public string UserComment { get; set; } = string.Empty;  // 用户的个人笔记
         public bool IsDeleted { get; set; } = false;             // 预留给回收站
+        // 【核心修复】：追加“未分类/孤儿”状态标记
+        public bool IsOrphan { get; set; } = false;
     }
 }

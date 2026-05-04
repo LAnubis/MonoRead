@@ -6,6 +6,7 @@ using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure.Logging;
 using System.Collections.ObjectModel;
+using System.Linq; // 确保引入 Linq
 
 namespace MonoRead.App.ViewModels
 {
@@ -16,23 +17,12 @@ namespace MonoRead.App.ViewModels
         private readonly IBookRepository _bookRepository;
         private readonly IFolderRepository _folderRepository;
 
-        [ObservableProperty]
-        private ObservableCollection<LibraryItemNode> _items = new();
-
-        [ObservableProperty]
-        private bool _isBusy;
-
-        [ObservableProperty]
-        private string _busyMessage = "正在处理...";
-
-        [ObservableProperty]
-        private bool _isEditMode;
-
-        [ObservableProperty]
-        private string _editModeButtonText = "管理";
-
-        [ObservableProperty]
-        private ObservableCollection<LibraryItemNode> _selectedItems = new();
+        [ObservableProperty] private ObservableCollection<LibraryItemNode> _items = new();
+        [ObservableProperty] private bool _isBusy;
+        [ObservableProperty] private string _busyMessage = "正在处理...";
+        [ObservableProperty] private bool _isEditMode;
+        [ObservableProperty] private string _editModeButtonText = "管理";
+        [ObservableProperty] private ObservableCollection<LibraryItemNode> _selectedItems = new();
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsNotRoot))]
@@ -85,7 +75,7 @@ namespace MonoRead.App.ViewModels
                             Title = f.Name,
                             Subtitle = "文件夹",
                             OriginalEntity = f,
-                            ShowCheckBox = IsEditMode // 【修复】：继承当前编辑状态
+                            ShowCheckBox = IsEditMode
                         });
                     }
                 }
@@ -114,10 +104,7 @@ namespace MonoRead.App.ViewModels
                     foreach (var node in nodes) Items.Add(node);
                 });
             }
-            catch (Exception ex)
-            {
-                LocalLogger.LogError($"加载混合书架异常: {ex.Message}");
-            }
+            catch (Exception ex) { LocalLogger.LogError($"加载混合书架异常: {ex.Message}"); }
         }
 
         [RelayCommand]
@@ -134,7 +121,6 @@ namespace MonoRead.App.ViewModels
 
             if (IsEditMode)
             {
-                // 【放权】：允许文件夹在编辑模式下被选中（为了后续的批量删除）
                 node.IsSelected = !node.IsSelected;
                 if (node.IsSelected && !SelectedItems.Contains(node)) SelectedItems.Add(node);
                 else if (!node.IsSelected && SelectedItems.Contains(node)) SelectedItems.Remove(node);
@@ -157,16 +143,13 @@ namespace MonoRead.App.ViewModels
                     await Shell.Current.GoToAsync(route);
                 }
             }
-            finally
-            {
-                IsBusy = false;
-            }
+            finally { IsBusy = false; }
         }
 
         [RelayCommand]
         private async Task ImportBookAsync()
         {
-            // (导入逻辑保持原样)
+            // 导入逻辑保持原样
             if (IsBusy) return;
             try
             {
@@ -221,7 +204,6 @@ namespace MonoRead.App.ViewModels
 
         private async Task ProcessImportedFileAsync(string sandboxPath, string fileName)
         {
-            // (原导入防重逻辑保持不变)
             if (IsBusy) return;
             IsBusy = true;
             BusyMessage = "正在极速拆解小说章节，请稍候...";
@@ -269,18 +251,6 @@ namespace MonoRead.App.ViewModels
             finally { IsBusy = false; }
         }
 
-        //[RelayCommand]
-        //private async Task GoToTrashAsync()
-        //{
-        //    try { await Shell.Current.GoToAsync("TrashPage"); }
-        //    catch (Exception) { await Application.Current.MainPage.DisplayAlert("提示", "回收站页面暂未创建", "确定"); }
-        //}
-
-        //[RelayCommand]
-        //private async Task ExportLogAsync() { /* 原有导出逻辑 */ }
-
-        // 【废弃指令】：ItemLongPressCommand 已根据要求被抹除。
-
         [RelayCommand]
         private void ToggleEditMode()
         {
@@ -290,54 +260,99 @@ namespace MonoRead.App.ViewModels
             foreach (var item in Items)
             {
                 if (!IsEditMode) item.IsSelected = false;
-                // 【放权】：现在无论书还是文件夹，只要进入编辑模式，就展示复选框
                 item.ShowCheckBox = IsEditMode;
             }
 
             if (!IsEditMode) SelectedItems.Clear();
         }
 
-        // 【新增：批量摧毁引擎】
+        // =========================================================
+        // 【核心架构修复】：批量摧毁引擎，集成安全防护与聚合提示
+        // =========================================================
         [RelayCommand]
         private async Task DeleteSelectedItemsAsync()
         {
             if (!SelectedItems.Any()) return;
 
+            // 1. 第一级警告：常规确认
             bool confirm = await Application.Current.MainPage.DisplayAlert("批量删除",
                 $"确定要将选中的 {SelectedItems.Count} 项移入回收站吗？\n(删除文件夹将同时移出其内部的所有书籍)", "确定删除", "取消");
 
             if (!confirm) return;
 
             IsBusy = true;
-            BusyMessage = "正在清理数据...";
+            BusyMessage = "正在安全清理数据...";
 
             try
             {
+                var booksToDelete = new List<Book>();
+                var foldersToDelete = new List<Folder>();
+                var allBooks = await _bookRepository.GetAllBooksAsync();
+
+                // 2. 递归收集：找出所有即将被波及的书籍（直接选中 + 文件夹内部）
                 foreach (var node in SelectedItems.ToList())
                 {
                     if (node.IsFolder && node.OriginalEntity is Folder folder)
                     {
-                        // 1. 级联软删除文件夹内的书籍
-                        var folderBooks = (await _bookRepository.GetAllBooksAsync()).Where(b => b.FolderId == folder.Id).ToList();
-                        foreach (var b in folderBooks)
-                        {
-                            b.IsDeleted = true;
-                            await _bookRepository.UpdateAsync(b);
-                        }
-                        // 2. 物理抹除当前层级的文件夹实体
-                        await _folderRepository.DeleteAsync(folder);
+                        foldersToDelete.Add(folder);
+                        booksToDelete.AddRange(allBooks.Where(b => b.FolderId == folder.Id));
                     }
                     else if (!node.IsFolder && node.OriginalEntity is Book book)
                     {
-                        book.IsDeleted = true;
-                        await _bookRepository.UpdateAsync(book);
+                        booksToDelete.Add(book);
                     }
+                }
+
+                // 列表去重，防止选中了外层文件夹又选中了里面的书
+                booksToDelete = booksToDelete.GroupBy(b => b.Id).Select(g => g.First()).ToList();
+
+                // 3. 聚合探针检测：这些波及的书籍中，是否有任何一本包含笔记？
+                bool hasAnyNotes = false;
+                foreach (var book in booksToDelete)
+                {
+                    if (await _bookRepository.HasActiveNotesAsync(book.Id))
+                    {
+                        hasAnyNotes = true;
+                        break;
+                    }
+                }
+
+                // 4. 第二级警告：如果查出笔记，进行聚合拦截询问
+                bool archiveNotes = false;
+                if (hasAnyNotes)
+                {
+                    // 暂时关闭菊花转圈，让用户安心看弹窗
+                    IsBusy = false;
+                    string actionStr = await Application.Current.MainPage.DisplayActionSheet(
+                        "检测到您选中的书籍中包含【读书笔记】，请选择处理方式：",
+                        "取消删除", null,
+                        "仅移出书籍（笔记保留为未分类）",
+                        "书籍和笔记一起移入回收站");
+
+                    if (actionStr == "仅移出书籍（笔记保留为未分类）") { archiveNotes = false; }
+                    else if (actionStr == "书籍和笔记一起移入回收站") { archiveNotes = true; }
+                    else { return; } // 用户点击了取消或蒙层
+
+                    IsBusy = true; // 恢复处理状态
+                }
+
+                // 5. 统一下发事务操作，调用我们上一版的底层复合逻辑
+                foreach (var book in booksToDelete)
+                {
+                    await _bookRepository.ArchiveBookSafelyAsync(book.Id, archiveNotes);
+                }
+
+                // 6. 物理抹除当前层级的文件夹实体
+                foreach (var folder in foldersToDelete)
+                {
+                    await _folderRepository.DeleteAsync(folder);
                 }
 
                 MainThread.BeginInvokeOnMainThread(async () =>
                 {
                     ToggleEditModeCommand.Execute(null);
                     await LoadItemsAsync();
+                    await Application.Current.MainPage.DisplayAlert("清理完成", "所选项已安全移入回收站", "确定");
                 });
             }
             catch (Exception ex)
@@ -351,9 +366,9 @@ namespace MonoRead.App.ViewModels
         [RelayCommand]
         private async Task MoveSelectedItemsToFolderAsync()
         {
+            // ... (保持你提供的原有移动逻辑不变) ...
             if (!SelectedItems.Any()) return;
 
-            // 【防呆拦截】：检查是否选了文件夹
             var selectedFolders = SelectedItems.Where(i => i.IsFolder).ToList();
             if (selectedFolders.Any())
             {

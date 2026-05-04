@@ -22,5 +22,12 @@ namespace MonoRead.Core.Interfaces
 
         // 顺便预留硬删除接口（以备彻底清空回收站时使用）
         Task DeleteAsync(Book book);
+        // 【新增 1】：前置探针：查询该书是否有正常状态的笔记
+        Task<bool> HasActiveNotesAsync(Guid bookId);
+
+        // 【新增 2】：复合安全删除事务
+        // archiveNotes = true 代表连带笔记一起软删除（进回收站）
+        // archiveNotes = false 代表保留笔记（变为孤儿/未分类）
+        Task ArchiveBookSafelyAsync(Guid bookId, bool archiveNotes);
     }
 }
