@@ -101,6 +101,9 @@ namespace MonoRead.App
 
             builder.Services.AddTransient<MonoRead.App.ViewModels.CloudFilePickerViewModel>();
             builder.Services.AddTransient<MonoRead.App.Views.CloudFilePickerPage>();
+            // 在 builder.Services 的地方追加这两行：
+            builder.Services.AddSingleton<IZipArchiveService, MonoRead.Infrastructure.Services.ZipArchiveService>();
+            builder.Services.AddSingleton<MonoRead.UseCase.ICloudBackupUseCase, MonoRead.UseCase.CloudBackupUseCase>();
             // ==================== 数据库自动迁移建表 ====================
             var app = builder.Build();
             using (var scope = app.Services.CreateScope())

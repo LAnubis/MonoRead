@@ -15,44 +15,52 @@
                 </Grid.GestureRecognizers>
                 <Label Text="← 返回" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
             </Grid>
-            <Label Grid.Column="1" Text="云端配置" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center"/>
+            <Label Grid.Column="1" Text="云端数据中心" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center"/>
             <ContentView Grid.Column="2" WidthRequest="50" />
         </Grid>
 
         <ScrollView Grid.Row="1" Padding="20">
             <VerticalStackLayout Spacing="15">
 
+                <!-- 1. 账号配置面板 -->
                 <Border BackgroundColor="#FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 12" Padding="20">
                     <VerticalStackLayout Spacing="15">
-
-                        <Label Text="连接坚果云 (WebDAV)" FontSize="16" FontAttributes="Bold" TextColor="#333333"/>
-                        <Label Text="请不要使用您的登录密码。必须前往坚果云官网生成【应用授权密码】进行绑定，保障您的主账号安全。" FontSize="12" TextColor="#999999" />
-
+                        <Label Text="坚果云授权" FontSize="16" FontAttributes="Bold" TextColor="#333333"/>
+                        <Label Text="请使用官网生成的应用授权密码，保障主账号安全。" FontSize="12" TextColor="#999999" />
                         <VerticalStackLayout Spacing="5">
-                            <Label Text="服务器地址 (WebDAV URL)" FontSize="12" TextColor="#666666"/>
+                            <Label Text="WebDAV URL" FontSize="12" TextColor="#666666"/>
                             <Entry Text="{Binding ServerUrl}" Placeholder="https://dav.jianguoyun.com/dav/" TextColor="#333333"/>
                         </VerticalStackLayout>
-
                         <VerticalStackLayout Spacing="5">
-                            <Label Text="坚果云账号 (通常为邮箱)" FontSize="12" TextColor="#666666"/>
-                            <Entry Text="{Binding Username}" Placeholder="example@email.com" Keyboard="Email" TextColor="#333333"/>
+                            <Label Text="账号 (邮箱)" FontSize="12" TextColor="#666666"/>
+                            <Entry Text="{Binding Username}" Keyboard="Email" TextColor="#333333"/>
                         </VerticalStackLayout>
-
                         <VerticalStackLayout Spacing="5">
                             <Label Text="应用授权密码" FontSize="12" TextColor="#666666"/>
-                            <Entry Text="{Binding Password}" IsPassword="True" Placeholder="非网页登录密码" TextColor="#333333"/>
+                            <Entry Text="{Binding Password}" IsPassword="True" TextColor="#333333"/>
                         </VerticalStackLayout>
-
+                        <Button Text="测试连接并保存" Command="{Binding SaveAndTestCommand}" BackgroundColor="#D1A67B" TextColor="White" CornerRadius="8" HeightRequest="45" FontAttributes="Bold" Margin="0,10,0,0"/>
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- 测试按钮与状态 -->
-                <!--<Button Text="测试连接并保存" Command="{Binding SaveAndTestAsync}" BackgroundColor="#D1A67B" TextColor="White" CornerRadius="8" HeightRequest="50" FontAttributes="Bold" />-->
-                <!-- 【核心修复】：将 Async 后缀改为 Command 后缀 -->
-                <Button Text="测试连接并保存" Command="{Binding SaveAndTestCommand}" BackgroundColor="#D1A67B" TextColor="White" CornerRadius="8" HeightRequest="50" FontAttributes="Bold" />
-                <Label Text="{Binding TestResultText}" TextColor="{Binding TestResultColor}" HorizontalOptions="Center" FontSize="14" Margin="0,10,0,0"/>
+                <!-- 提示与 Loading -->
+                <Label Text="{Binding TestResultText}" TextColor="{Binding TestResultColor}" HorizontalOptions="Center" FontSize="14" Margin="0,5,0,0"/>
+                <ActivityIndicator IsRunning="{Binding IsBusy}" Color="#D1A67B" HorizontalOptions="Center" />
 
-                <ActivityIndicator IsRunning="{Binding IsBusy}" Color="#D1A67B" HorizontalOptions="Center" Margin="0,10,0,0"/>
+                <!-- 2. 变形展开：云端操作台 (配置正确后才会出现) -->
+                <Border BackgroundColor="#FFFFFF" StrokeThickness="0" StrokeShape="RoundRectangle 12" Padding="20" Margin="0,10,0,40" IsVisible="{Binding IsConfigValid}">
+                    <VerticalStackLayout Spacing="20">
+                        <Label Text="快照管理" FontSize="16" FontAttributes="Bold" TextColor="#333333"/>
+
+                        <Frame BackgroundColor="#F0F8FF" CornerRadius="8" HasShadow="False" Padding="15">
+                            <Label Text="{Binding LastBackupTimeText}" TextColor="#0066CC" FontSize="13" HorizontalOptions="Center" FontAttributes="Bold"/>
+                        </Frame>
+
+                        <Button Text="⬆️ 创建云端快照 (备份)" Command="{Binding BackupDataCommand}" BackgroundColor="#4CAF50" TextColor="White" CornerRadius="8" HeightRequest="50" FontAttributes="Bold" />
+
+                        <Button Text="⬇️ 从云端恢复数据 (覆盖本机)" Command="{Binding RestoreDataCommand}" BackgroundColor="Transparent" BorderColor="#E57373" BorderWidth="1" TextColor="#E57373" CornerRadius="8" HeightRequest="50" FontAttributes="Bold" Margin="0,10,0,0"/>
+                    </VerticalStackLayout>
+                </Border>
 
             </VerticalStackLayout>
         </ScrollView>

@@ -185,5 +185,68 @@ namespace MonoRead.Infrastructure.Services
                 return false;
             }
         }
+
+        // ==================== 备份专用核心网络方法 ====================
+
+        public async Task<bool> EnsureDirectoryExistsAsync(string serverUrl, string username, string password, string directoryPath)
+        {
+            try
+            {
+                SetBasicAuth(username, password);
+                string fullUrl = BuildFullUrl(serverUrl, directoryPath, isDirectory: true);
+
+                // WebDAV 建目录标准动词：MKCOL
+                var request = new HttpRequestMessage(new HttpMethod("MKCOL"), fullUrl);
+                var response = await _httpClient.SendAsync(request);
+
+                // 201 Created (成功); 405 Method Not Allowed (通常表示目录已存在)
+                return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed;
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"创建云端目录失败: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> UploadFileAsync(string serverUrl, string username, string password, string localFilePath, string remoteFilePath, IProgress<double>? progress = null)
+        {
+            try
+            {
+                SetBasicAuth(username, password);
+                string fullUrl = BuildFullUrl(serverUrl, remoteFilePath, isDirectory: false);
+
+                using var fileStream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var content = new StreamContent(fileStream);
+                content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+                var response = await _httpClient.PutAsync(fullUrl, content);
+                response.EnsureSuccessStatusCode();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"WebDAV 上传失败: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> DeleteFileAsync(string serverUrl, string username, string password, string remoteFilePath)
+        {
+            try
+            {
+                SetBasicAuth(username, password);
+                string fullUrl = BuildFullUrl(serverUrl, remoteFilePath, isDirectory: false);
+
+                var response = await _httpClient.DeleteAsync(fullUrl);
+                response.EnsureSuccessStatusCode();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"WebDAV 删除失败: {ex.Message}");
+                return false;
+            }
+        }
     }
 }

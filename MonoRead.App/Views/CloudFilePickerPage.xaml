@@ -51,7 +51,16 @@
                                 <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
                                     <Label Text="{Binding DisplayName}" FontSize="16" TextColor="#333333" LineBreakMode="TailTruncation"/>
                                     <!-- 仅显示文件大小 -->
-                                    <Label Text="{Binding ContentLength}" FontSize="12" TextColor="#999999" IsVisible="{Binding IsDirectory, Converter={StaticResource InvertedBoolConverter}}"/>
+                                    <!--<Label Text="{Binding ContentLength}" FontSize="12" TextColor="#999999" IsVisible="{Binding IsDirectory, Converter={StaticResource InvertedBoolConverter}}"/>-->
+                                    <!-- 【核心修复】：移除 InvertedBoolConverter，使用原生的 DataTrigger -->
+                                    <!-- 默认隐藏，只有当 IsDirectory 为 False（也就是文件时）才显示大小 -->
+                                    <Label Text="{Binding ContentLength}" FontSize="12" TextColor="#999999" IsVisible="False">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label" Binding="{Binding IsDirectory}" Value="False">
+                                                <Setter Property="IsVisible" Value="True" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
                                 </VerticalStackLayout>
                             </Grid>
                         </DataTemplate>
