@@ -2,6 +2,7 @@
 using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure;
+using MonoRead.Infrastructure.Logging;
 
 namespace MonoRead.Infrastructure.services
 {
@@ -72,6 +73,26 @@ namespace MonoRead.Infrastructure.services
             {
                 _context.BookNotes.Remove(note);
                 await _context.SaveChangesAsync();
+            }
+        }
+        // =========================================================
+        // 【新增】：软删除实现
+        // =========================================================
+        public async Task DeleteAsync(BookNote note)
+        {
+            try
+            {
+                // 严格遵循架构文档 4.4 节：点击删除仅标记 IsDeleted = true，设定 DeletedAt = DateTime.UtcNow
+                note.IsDeleted = true;
+                note.DeletedAt = DateTime.UtcNow;
+
+                _context.BookNotes.Update(note);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"删除笔记失败: {ex.Message}");
+                throw;
             }
         }
     }

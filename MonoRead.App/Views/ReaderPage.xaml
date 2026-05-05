@@ -114,6 +114,47 @@
             </Border>
         </Grid>
 
+        <!-- ==================== 图层 3：目录侧边栏 (新增补全) ==================== -->
+        <Grid IsVisible="{Binding IsTocVisible}" BackgroundColor="Transparent">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="4*" />
+                <!-- 左侧目录面板，占屏幕 4/5 -->
+                <ColumnDefinition Width="1*" />
+                <!-- 右侧透明区域，占 1/5 -->
+            </Grid.ColumnDefinitions>
+
+            <!-- 右侧半透明遮罩（点击关闭目录） -->
+            <Grid Grid.Column="1" BackgroundColor="#80000000">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ToggleTocCommand}" />
+                </Grid.GestureRecognizers>
+            </Grid>
+
+            <!-- 左侧目录实体面板 -->
+            <Grid Grid.Column="0" BackgroundColor="#FFFFFF" RowDefinitions="Auto, *">
+                <!-- 目录标题栏 -->
+                <Grid Grid.Row="0" Padding="20,50,20,15" BackgroundColor="#FFFFFF">
+                    <Label Text="目录" FontSize="20" FontAttributes="Bold" TextColor="#333333" />
+                </Grid>
+                <BoxView Grid.Row="0" HeightRequest="1" Color="#EEEEEE" VerticalOptions="End" />
+
+                <!-- 章节列表 -->
+                <CollectionView Grid.Row="1" ItemsSource="{Binding ChaptersList}" SelectionMode="None">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Padding="20,18">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding BindingContext.SelectChapterCommand, Source={x:Reference RootPage}}" CommandParameter="{Binding .}" />
+                                </Grid.GestureRecognizers>
+                                <Label Text="{Binding Title}" FontSize="15" TextColor="#666666" LineBreakMode="TailTruncation" VerticalOptions="Center"/>
+                                <BoxView HeightRequest="1" Color="#F9F9F9" VerticalOptions="End" Margin="-20,0"/>
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+        </Grid>
+
         <!-- ==================== 图层 4：原生联动摘录工作台 ==================== -->
         <Grid RowDefinitions="Auto, *, Auto, Auto" IsVisible="{Binding IsNoteOverlayVisible}" BackgroundColor="#FDFDFD">
 
@@ -146,7 +187,7 @@
             </Border>
         </Grid>
 
-        <!-- 加载遮罩 -->
+        <!-- ==================== 图层 5：加载遮罩 ==================== -->
         <Grid BackgroundColor="#CC000000" IsVisible="{Binding IsLoading}">
             <ActivityIndicator IsRunning="{Binding IsLoading}" Color="White" WidthRequest="50" HeightRequest="50" HorizontalOptions="Center" VerticalOptions="Center" />
         </Grid>

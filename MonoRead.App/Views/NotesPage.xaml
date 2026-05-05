@@ -6,7 +6,9 @@
              x:Name="RootPage"
              Shell.NavBarIsVisible="False"
              BackgroundColor="#F5F5F5">
+
     <Grid RowDefinitions="Auto, *">
+        <!-- 头部标题 -->
         <Grid Grid.Row="0" Padding="20,40,20,20" BackgroundColor="#F5F5F5">
             <Label Text="笔记归档" FontSize="28" FontAttributes="Bold" TextColor="#333333" />
         </Grid>
@@ -15,7 +17,7 @@
             <CollectionView.EmptyView>
                 <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16" Margin="0,100,0,0">
                     <Label Text="📚" FontSize="72" HorizontalOptions="Center" Opacity="0.5"/>
-                    <Label Text="还没有记录过笔记" FontSize="16" TextColor="#999999" />
+                    <Label Text="还没有记录过笔记" FontSize="16" TextColor="#999999" HorizontalOptions="Center"/>
                 </VerticalStackLayout>
             </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
@@ -29,7 +31,7 @@
                                 <Label Text="📖" FontSize="20" HorizontalOptions="Center" VerticalOptions="Center" />
                             </Border>
                             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                                <Label Text="{Binding BookTitle}" FontSize="18" FontAttributes="Bold" TextColor="#333333" />
+                                <Label Text="{Binding BookTitle}" FontSize="18" FontAttributes="Bold" TextColor="#333333" LineBreakMode="TailTruncation" />
                                 <Label Text="{Binding NoteCount, StringFormat='共 {0} 条笔记'}" FontSize="14" TextColor="#999999" Margin="0,5,0,0" />
                             </VerticalStackLayout>
                             <Label Grid.Column="2" Text=">" FontSize="20" TextColor="#CCCCCC" VerticalOptions="Center" FontAttributes="Bold"/>

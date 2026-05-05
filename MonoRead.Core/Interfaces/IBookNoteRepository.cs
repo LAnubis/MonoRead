@@ -17,5 +17,7 @@ namespace MonoRead.Core.Interfaces
 
         Task RestoreNoteAsync(Guid noteId);
         Task PermanentlyDeleteNoteAsync(Guid noteId);
+        // 【新增】：删除单条笔记的契约
+        Task DeleteAsync(BookNote note);
     }
 }

@@ -13,7 +13,6 @@ public partial class NotesPage : ContentPage
         BindingContext = _viewModel;
     }
 
-    // 页面呈现钩子：强制触发生命周期内的数据最新拉取
     protected override async void OnAppearing()
     {
         base.OnAppearing();

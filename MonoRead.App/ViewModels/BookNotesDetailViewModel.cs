@@ -1,4 +1,5 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Maui.Core;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
@@ -7,17 +8,37 @@ using System.Collections.ObjectModel;
 
 namespace MonoRead.App.ViewModels
 {
-    // 【架构隔离】：表现层防腐模型，确保数据库实体 BookNote 不被混入 UI 特有的 IsSelected 属性
-    public partial class SelectableBookNote : ObservableObject
+    // 【节点 UI 模型】：管理折叠展开状态与复选框状态
+    public partial class NoteItemUiModel : ObservableObject
     {
-        public BookNote Note { get; }
+        public BookNote Note { get; set; }
 
-        [ObservableProperty]
-        private bool _isSelected;
+        public bool HasComment => !string.IsNullOrWhiteSpace(Note.UserComment);
 
-        public SelectableBookNote(BookNote note)
+        [ObservableProperty] private bool _isExpanded;
+        [ObservableProperty] private bool _isSelected;
+
+        [RelayCommand]
+        private void ToggleExpand()
         {
-            Note = note;
+            // 如果有想法，点击触发折叠/展开；如果没有想法，点击无反应
+            if (HasComment) IsExpanded = !IsExpanded;
+        }
+
+        [RelayCommand]
+        private void ToggleSelection()
+        {
+            IsSelected = !IsSelected;
+        }
+    }
+
+    // 【分组容器】：用于 CollectionView 的 IsGrouped="True"
+    public class NoteGroup : ObservableCollection<NoteItemUiModel>
+    {
+        public string ChapterTitle { get; private set; }
+        public NoteGroup(string chapterTitle, IEnumerable<NoteItemUiModel> items) : base(items)
+        {
+            ChapterTitle = chapterTitle;
         }
     }
 
@@ -26,130 +47,127 @@ namespace MonoRead.App.ViewModels
     public partial class BookNotesDetailViewModel : ObservableObject
     {
         private readonly IBookNoteRepository _noteRepository;
-        private Guid _currentBookId;
+        private readonly IBookRepository _bookRepository;
 
         [ObservableProperty] private string _bookIdString = string.Empty;
-        [ObservableProperty] private string _bookTitle = "笔记详情";
-
-        // 列表泛型改为包装器类
-        [ObservableProperty] private ObservableCollection<SelectableBookNote> _notesList = new();
+        [ObservableProperty] private string _bookTitle = string.Empty;
         [ObservableProperty] private bool _isBusy;
 
-        // 【新增】：管理模式状态开关
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(ManageButtonText))]
-        private bool _isManageMode;
+        // 分组数据源
+        [ObservableProperty] private ObservableCollection<NoteGroup> _groupedNotes = new();
 
-        // 动态计算顶部按钮文本
-        public string ManageButtonText => IsManageMode ? "取消" : "管理";
+        // 管理模式状态
+        [ObservableProperty] private bool _isManageMode;
+        [ObservableProperty] private string _manageButtonText = "管理";
 
-        public BookNotesDetailViewModel(IBookNoteRepository noteRepository)
+        public BookNotesDetailViewModel(IBookNoteRepository noteRepository, IBookRepository bookRepository)
         {
             _noteRepository = noteRepository;
+            _bookRepository = bookRepository;
         }
 
         partial void OnBookIdStringChanged(string value)
         {
-            if (Guid.TryParse(value, out Guid bookId))
-            {
-                _currentBookId = bookId;
-                LoadNotesAsync();
-            }
+            if (value == "Orphan") LoadOrphanNotesAsync();
+            else if (Guid.TryParse(value, out Guid parsedId)) LoadBookNotesAsync(parsedId);
         }
 
-        private async void LoadNotesAsync()
+        private async void LoadBookNotesAsync(Guid bookId)
         {
-            if (IsBusy) return;
             IsBusy = true;
             try
             {
-                var notes = await _noteRepository.GetNotesByBookIdAsync(_currentBookId);
-                // 将实体映射为 UI 包装器
-                var wrappedNotes = notes.Select(n => new SelectableBookNote(n)).ToList();
-                var newCollection = new ObservableCollection<SelectableBookNote>(wrappedNotes);
+                var book = await _bookRepository.GetBookWithChaptersAsync(bookId);
+                var notes = await _noteRepository.GetNotesByBookIdAsync(bookId);
+                var activeNotes = notes.Where(n => !n.IsDeleted && !n.IsOrphan).OrderBy(n => n.CreatedAt).ToList();
+
+                var groupedByChapter = activeNotes.GroupBy(n => n.ChapterId);
+                var groupedResult = new List<NoteGroup>();
+
+                foreach (var group in groupedByChapter)
+                {
+                    var chapter = book?.Chapters.FirstOrDefault(c => c.Id == group.Key);
+                    string chapterName = chapter != null ? chapter.Title : "全局笔记";
+
+                    var uiItems = group.Select(n => new NoteItemUiModel { Note = n, IsExpanded = false, IsSelected = false });
+                    groupedResult.Add(new NoteGroup(chapterName, uiItems));
+                }
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    NotesList = newCollection;
-                    IsManageMode = false; // 加载完默认退出管理模式
+                    GroupedNotes.Clear();
+                    foreach (var g in groupedResult) GroupedNotes.Add(g);
                 });
             }
-            catch (Exception ex)
-            {
-                LocalLogger.LogError($"加载笔记详情失败: {ex.Message}");
-            }
-            finally
-            {
-                MainThread.BeginInvokeOnMainThread(() => IsBusy = false);
-            }
+            catch (Exception ex) { LocalLogger.LogError($"加载笔记异常: {ex.Message}"); }
+            finally { IsBusy = false; }
         }
 
-        // 【新增】：切换管理模式
+        private async void LoadOrphanNotesAsync()
+        {
+            // 孤儿笔记不分组章节，直接拉取展示
+            IsBusy = true;
+            try
+            {
+                var allNotes = await _noteRepository.GetAllNotDeletedAsync();
+                var orphans = allNotes.Where(n => n.BookId == null || n.IsOrphan).OrderByDescending(n => n.CreatedAt).ToList();
+
+                var uiItems = orphans.Select(n => new NoteItemUiModel { Note = n, IsExpanded = false, IsSelected = false });
+                var group = new NoteGroup("已删除书籍的笔记", uiItems);
+
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    GroupedNotes.Clear();
+                    GroupedNotes.Add(group);
+                });
+            }
+            catch (Exception ex) { LocalLogger.LogError($"加载孤儿笔记异常: {ex.Message}"); }
+            finally { IsBusy = false; }
+        }
+
         [RelayCommand]
         private void ToggleManageMode()
         {
-            if (NotesList.Count == 0) return; // 空列表不让点管理
             IsManageMode = !IsManageMode;
+            ManageButtonText = IsManageMode ? "完成" : "管理";
 
-            // 如果点击了取消，清空所有勾选状态
+            // 退出管理模式时，清空所有勾选
             if (!IsManageMode)
             {
-                foreach (var item in NotesList) item.IsSelected = false;
+                foreach (var group in GroupedNotes)
+                    foreach (var item in group)
+                        item.IsSelected = false;
             }
         }
 
-        // 【新增】：整行点击切换复选框状态的快捷体验
-        [RelayCommand]
-        private void ToggleItemSelection(SelectableBookNote item)
-        {
-            if (IsManageMode && item != null)
-            {
-                item.IsSelected = !item.IsSelected;
-            }
-        }
-
-        // 【新增】：执行批量逻辑删除
         [RelayCommand]
         private async Task DeleteSelectedNotesAsync()
         {
-            var selectedItems = NotesList.Where(n => n.IsSelected).ToList();
-            if (!selectedItems.Any())
-            {
-                await Application.Current.MainPage!.DisplayAlert("提示", "请至少选择一条要删除的笔记", "确定");
-                return;
-            }
+            var selectedNotes = GroupedNotes.SelectMany(g => g).Where(i => i.IsSelected).Select(i => i.Note).ToList();
+            if (!selectedNotes.Any()) return;
 
-            bool confirm = await Application.Current.MainPage!.DisplayAlert("确认删除", $"确定要删除这 {selectedItems.Count} 条笔记吗？它们将被移入回收站。", "删除", "取消");
+            bool confirm = await Application.Current.MainPage!.DisplayAlert("确认删除", $"确定要删除选中的 {selectedNotes.Count} 条笔记吗？", "删除", "取消");
             if (!confirm) return;
 
+            IsBusy = true;
             try
             {
-                IsBusy = true;
-                // 提取 ID 集合
-                var idsToDelete = selectedItems.Select(s => s.Note.Id).ToList();
-
-                // 执行数据库物理层逻辑删除
-                await _noteRepository.SoftDeleteNotesAsync(idsToDelete);
-
-                // UI 层就地移除，避免重新查库造成的闪烁
-                MainThread.BeginInvokeOnMainThread(() =>
+                foreach (var note in selectedNotes)
                 {
-                    foreach (var item in selectedItems)
-                    {
-                        NotesList.Remove(item);
-                    }
-                    IsManageMode = false;
-                });
+                    await _noteRepository.DeleteAsync(note);
+                }
+
+                ToggleManageModeCommand.Execute(null);
+
+                // 重新加载刷新列表
+                if (BookIdString == "Orphan") LoadOrphanNotesAsync();
+                else if (Guid.TryParse(BookIdString, out Guid id)) LoadBookNotesAsync(id);
             }
             catch (Exception ex)
             {
-                LocalLogger.LogError($"删除笔记失败: {ex.Message}");
-                await Application.Current.MainPage!.DisplayAlert("错误", "删除失败，请稍后重试", "确定");
+                await Application.Current.MainPage!.DisplayAlert("错误", $"删除失败: {ex.Message}", "确定");
             }
-            finally
-            {
-                IsBusy = false;
-            }
+            finally { IsBusy = false; }
         }
 
         [RelayCommand]
