@@ -94,6 +94,13 @@ namespace MonoRead.App
             builder.Services.AddTransient<TrashViewModel>(); 
             builder.Services.AddTransient<TrashPage>();
 
+
+            builder.Services.AddSingleton<MonoRead.Core.Interfaces.ICloudStorageService, MonoRead.Infrastructure.Services.WebDavStorageService>();
+            builder.Services.AddTransient<MonoRead.App.ViewModels.CloudBackupViewModel>();
+            builder.Services.AddTransient<MonoRead.App.Views.CloudBackupPage>();
+
+            builder.Services.AddTransient<MonoRead.App.ViewModels.CloudFilePickerViewModel>();
+            builder.Services.AddTransient<MonoRead.App.Views.CloudFilePickerPage>();
             // ==================== 数据库自动迁移建表 ====================
             var app = builder.Build();
             using (var scope = app.Services.CreateScope())

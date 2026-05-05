@@ -1,6 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using MonoRead.Core.Entities;
-using System;
 
 namespace MonoRead.App.ViewModels
 {

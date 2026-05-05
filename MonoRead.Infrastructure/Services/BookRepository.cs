@@ -16,7 +16,11 @@ namespace MonoRead.Infrastructure.services
 
         public async Task<List<Book>> GetAllBooksAsync()
         {
-            return await _context.Books.ToListAsync();
+            // 【核心修复】：全局拉取书籍时，利用 EF Core 的 Include 贪婪加载轻量级的章节目录树。
+            // 彻底解决书架、最近阅读页面冷启动时 Chapters 为 null 导致的“未解析”问题。
+            return await _context.Books
+                                 .Include(b => b.Chapters)
+                                 .ToListAsync();
         }
 
         public async Task<Book?> GetBookWithChaptersAsync(Guid bookId)

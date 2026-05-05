@@ -14,6 +14,9 @@ namespace MonoRead.App
             // 确保深层页面被注册在路由字典中
             Routing.RegisterRoute(nameof(Views.ReaderPage), typeof(Views.ReaderPage));
             Routing.RegisterRoute(nameof(Views.BookNotesDetailPage), typeof(Views.BookNotesDetailPage));
+            Routing.RegisterRoute("AboutUsPage", typeof(Views.AboutUsPage));
+            Routing.RegisterRoute("CloudBackupPage", typeof(Views.CloudBackupPage));
+            Routing.RegisterRoute("CloudFilePickerPage", typeof(Views.CloudFilePickerPage));
         }
     }
 }

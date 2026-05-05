@@ -57,5 +57,17 @@ namespace MonoRead.App.ViewModels
                 LocalLogger.LogError($"跳转关于页面失败: {ex.Message}");
             }
         }
+        [RelayCommand]
+        private async Task GoToCloudBackupAsync()
+        {
+            try
+            {
+                await Shell.Current.GoToAsync("CloudBackupPage");
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"跳转云端配置页面失败: {ex.Message}");
+            }
+        }
     }
 }
