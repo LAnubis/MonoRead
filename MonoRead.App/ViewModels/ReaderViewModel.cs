@@ -5,24 +5,32 @@ using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure.Logging;
 using System.Collections.ObjectModel;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui.Graphics;
+using System.Linq;
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace MonoRead.App.ViewModels
 {
-    // ==================== 跨域消息实体定义 (全局共享) ====================
-    public record MenuToggleRequestedMessage();             // 请求呼出/隐藏菜单
-    public record TextSelectionStartedMessage();            // 原生长按选词启动了
-    public record TextSelectedMessage(string SelectedText); // 用户点击了浮窗的“写笔记”
+    public record MenuToggleRequestedMessage();
+    public record TextSelectionStartedMessage();
+    public record TextSelectedMessage(string SelectedText);
+
+    public partial class ParagraphUiModel : ObservableObject
+    {
+        public string RawText { get; set; } = string.Empty;
+        [ObservableProperty] private FormattedString _formattedText = new();
+    }
 
     public class ReaderChapterNode
     {
         public Guid ChapterId { get; set; }
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
-
-        public List<string> Paragraphs => Content
-            .Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(p => "　　" + p.Trim())
-            .ToList();
+        public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
     }
 
     [QueryProperty(nameof(BookIdString), "BookId")]
@@ -31,7 +39,6 @@ namespace MonoRead.App.ViewModels
         private readonly IBookRepository _bookRepository;
         private readonly IBookNoteRepository _noteRepository;
 
-        // ==================== 状态机 ====================
         [ObservableProperty] private bool _isLoading;
         [ObservableProperty] private bool _isLoadingNext;
         [ObservableProperty] private string _bookIdString = string.Empty;
@@ -39,25 +46,23 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private BookChapter? _currentChapter;
         [ObservableProperty] private string _chapterTitle = "加载中...";
 
-        // ==================== 瀑布流阅读引擎核心 ====================
         [ObservableProperty] private ObservableCollection<ReaderChapterNode> _readingStream = new();
         private int _lastLoadedSortOrder = -1;
 
-        // ==================== 导航与控件状态 ====================
         [ObservableProperty] private bool _canGoPrevious;
         [ObservableProperty] private bool _canGoNext;
         [ObservableProperty] private bool _isMenuVisible = false;
         [ObservableProperty] private bool _isTocVisible = false;
         [ObservableProperty] private ObservableCollection<BookChapter> _chaptersList = new();
 
-        // ==================== UI 偏好设置 ====================
         [ObservableProperty] private int _readerFontSize = Preferences.Default.Get("ReaderFontSize", 18);
         [ObservableProperty] private Color _pageBackgroundColor = Color.FromArgb(Preferences.Default.Get("ThemeBg", "#F4ECD8"));
         [ObservableProperty] private Color _textPrimaryColor = Color.FromArgb(Preferences.Default.Get("ThemeText", "#3E3222"));
         [ObservableProperty] private Color _statusTextColor = Color.FromArgb(Preferences.Default.Get("ThemeStatus", "#888888"));
 
-        // ==================== 笔记工作台状态 ====================
-        [ObservableProperty] private bool _isNoteOverlayVisible = false;
+        // ==================== 极简操作台状态机 ====================
+        [ObservableProperty] private bool _isFloatingMenuVisible = false; // 悬浮菜单
+        [ObservableProperty] private bool _isNoteOverlayVisible = false;  // 写想法工作台
         [ObservableProperty] private string _extractTargetParagraph = string.Empty;
         [ObservableProperty] private string _userNoteInput = string.Empty;
 
@@ -68,19 +73,8 @@ namespace MonoRead.App.ViewModels
             _bookRepository = bookRepository;
             _noteRepository = noteRepository;
 
-            // 1. 监听 Android 底层拦截到的单击/双击，或 XAML 空白处的点击
-            WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) =>
-            {
-                HandleMenuToggleRequest();
-            });
-
-            // 2. 监听长按选词开始：确保系统选词时，我们底部的设置菜单别跑出来碍事
-            WeakReferenceMessenger.Default.Register<TextSelectionStartedMessage>(this, (r, m) =>
-            {
-                MainThread.BeginInvokeOnMainThread(() => IsMenuVisible = false);
-            });
-
-            // 3. 监听选中文字：弹出笔记工作台
+            WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) => HandleMenuToggleRequest());
+            WeakReferenceMessenger.Default.Register<TextSelectionStartedMessage>(this, (r, m) => MainThread.BeginInvokeOnMainThread(() => IsMenuVisible = false));
             WeakReferenceMessenger.Default.Register<TextSelectedMessage>(this, (r, m) =>
             {
                 MainThread.BeginInvokeOnMainThread(() =>
@@ -88,9 +82,8 @@ namespace MonoRead.App.ViewModels
                     if (!string.IsNullOrWhiteSpace(m.SelectedText))
                     {
                         ExtractTargetParagraph = m.SelectedText;
-                        UserNoteInput = string.Empty;
                         IsMenuVisible = false;
-                        IsNoteOverlayVisible = true;
+                        IsFloatingMenuVisible = true; // 拦截系统选词，弹出极简菜单
                     }
                 });
             });
@@ -180,6 +173,57 @@ namespace MonoRead.App.ViewModels
             });
         }
 
+        private FormattedString BuildFormattedParagraph(string paragraphText, List<BookNote> chapterNotes)
+        {
+            var formattedString = new FormattedString();
+
+            var matchedNotes = chapterNotes
+                .Where(n => !string.IsNullOrWhiteSpace(n.SelectedText) && paragraphText.Contains(n.SelectedText))
+                .ToList();
+
+            if (!matchedNotes.Any())
+            {
+                formattedString.Spans.Add(new Span { Text = paragraphText });
+                return formattedString;
+            }
+
+            var noteOccurrences = new List<(int Index, BookNote Note)>();
+            foreach (var note in matchedNotes)
+            {
+                int idx = paragraphText.IndexOf(note.SelectedText);
+                if (idx != -1) noteOccurrences.Add((idx, note));
+            }
+            noteOccurrences = noteOccurrences.OrderBy(n => n.Index).ToList();
+
+            int currentIndex = 0;
+            foreach (var occurrence in noteOccurrences)
+            {
+                if (occurrence.Index < currentIndex) continue;
+
+                if (occurrence.Index > currentIndex)
+                {
+                    formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex, occurrence.Index - currentIndex) });
+                }
+
+                string colorHex = string.IsNullOrEmpty(occurrence.Note.Color) ? "#FFF9C4" : occurrence.Note.Color;
+
+                formattedString.Spans.Add(new Span
+                {
+                    Text = occurrence.Note.SelectedText,
+                    BackgroundColor = Color.FromArgb(colorHex)
+                });
+
+                currentIndex = occurrence.Index + occurrence.Note.SelectedText.Length;
+            }
+
+            if (currentIndex < paragraphText.Length)
+            {
+                formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex) });
+            }
+
+            return formattedString;
+        }
+
         private async Task LoadChapterIntoStreamAsync(BookChapter targetChapter, bool clearStream)
         {
             if (CurrentBook == null) return;
@@ -189,11 +233,30 @@ namespace MonoRead.App.ViewModels
             {
                 string extractedContent = await ExtractChapterContentAsync(targetChapter);
 
+                var allBookNotes = await _noteRepository.GetNotesByBookIdAsync(CurrentBook.Id);
+                var chapterNotes = allBookNotes.Where(n => n.ChapterId == targetChapter.Id && !n.IsDeleted).ToList();
+
+                var rawParagraphs = extractedContent
+                    .Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(p => "　　" + p.Trim())
+                    .ToList();
+
+                var paragraphsUi = new ObservableCollection<ParagraphUiModel>();
+                foreach (var text in rawParagraphs)
+                {
+                    paragraphsUi.Add(new ParagraphUiModel
+                    {
+                        RawText = text,
+                        FormattedText = BuildFormattedParagraph(text, chapterNotes)
+                    });
+                }
+
                 var newNode = new ReaderChapterNode
                 {
                     ChapterId = targetChapter.Id,
                     Title = targetChapter.Title,
-                    Content = extractedContent
+                    Content = extractedContent,
+                    Paragraphs = paragraphsUi
                 };
 
                 CurrentChapter = targetChapter;
@@ -214,6 +277,24 @@ namespace MonoRead.App.ViewModels
             }
             catch (Exception ex) { LocalLogger.LogError($"加载章节失败: {ex.Message}"); }
             finally { if (clearStream) IsLoading = false; else IsLoadingNext = false; }
+        }
+
+        private async Task RefreshHighlightingAsync()
+        {
+            if (CurrentBook == null) return;
+            var allNotes = await _noteRepository.GetNotesByBookIdAsync(CurrentBook.Id);
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                foreach (var node in ReadingStream)
+                {
+                    var chapterNotes = allNotes.Where(n => n.ChapterId == node.ChapterId && !n.IsDeleted).ToList();
+                    foreach (var p in node.Paragraphs)
+                    {
+                        p.FormattedText = BuildFormattedParagraph(p.RawText, chapterNotes);
+                    }
+                }
+            });
         }
 
         [RelayCommand]
@@ -246,26 +327,19 @@ namespace MonoRead.App.ViewModels
             if (nextChapter != null) await LoadChapterIntoStreamAsync(nextChapter, clearStream: true);
         }
 
-        // ==================== 极简触控与调度 ====================
-
         [RelayCommand]
-        private void ProcessTap()
-        {
-            HandleMenuToggleRequest();
-        }
+        private void ProcessTap() => HandleMenuToggleRequest();
 
         private void HandleMenuToggleRequest()
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                // 如果笔记面板开着，优先把它关掉
-                if (IsNoteOverlayVisible)
+                // 如果有任何弹出菜单开着，优先把它关掉，而不呼出主菜单
+                if (IsNoteOverlayVisible || IsFloatingMenuVisible)
                 {
-                    IsNoteOverlayVisible = false;
+                    CloseAllMenus();
                     return;
                 }
-
-                // 防抖（350ms）：忽略手抖或双击造成的连续请求
                 if ((DateTime.Now - _lastToggleTime).TotalMilliseconds < 350) return;
 
                 _lastToggleTime = DateTime.Now;
@@ -273,47 +347,104 @@ namespace MonoRead.App.ViewModels
             });
         }
 
-        [RelayCommand]
-        private void CloseNoteWorkbench() => IsNoteOverlayVisible = false;
+        // ====================================================================
+        // 【核心操作分流】：悬浮菜单的各类交互
+        // ====================================================================
 
+        // 1. 双击段落：提取文字并呼出【极简悬浮菜单】
         [RelayCommand]
-        private async Task SaveNoteAsync()
+        private void OpenFloatingMenu(string rawParagraphText)
+        {
+            ExtractTargetParagraph = rawParagraphText;
+            IsMenuVisible = false;
+            IsFloatingMenuVisible = true;
+        }
+
+        // 2. 悬浮菜单：点击了颜色圆点（默默存入，刷新高亮）
+        [RelayCommand]
+        private async Task SaveHighlightSilentlyAsync(string colorHex)
         {
             if (CurrentBook == null || CurrentChapter == null) return;
-
             if (string.IsNullOrWhiteSpace(ExtractTargetParagraph)) return;
-
-            if (string.IsNullOrWhiteSpace(UserNoteInput))
-            {
-                await Application.Current.MainPage!.DisplayAlert("提示", "笔记内容不能为空", "好的");
-                return;
-            }
 
             var note = new BookNote
             {
                 Id = Guid.NewGuid(),
                 BookId = CurrentBook.Id,
-                ChapterId = CurrentChapter.Id, // 补齐章节关联
+                ChapterId = CurrentChapter.Id,
                 BookTitle = CurrentBook.Title,
                 SelectedText = ExtractTargetParagraph,
-                UserComment = UserNoteInput,
+                UserComment = string.Empty,  // 【核心】：想法为空
+                Color = colorHex,            // 【核心】：记录选中的莫兰迪色
                 CreatedAt = DateTime.UtcNow,
                 IsDeleted = false
             };
 
-            // 物理落盘
             await _noteRepository.AddAsync(note);
+            await RefreshHighlightingAsync();
 
-            await Application.Current.MainPage!.DisplayAlert("保存成功", "笔记已记录", "确定");
-            CloseNoteWorkbench();
+            CloseAllMenus(); // 操作完成，深藏功与名
         }
 
-        // ==================== 界面与菜单控制 ====================
+        // 3. 悬浮菜单：点击了“写想法” -> 转入工作台
+        [RelayCommand]
+        private void OpenNoteWorkbench()
+        {
+            IsFloatingMenuVisible = false;
+            UserNoteInput = string.Empty;
+            IsNoteOverlayVisible = true; // 展开深度编辑台
+        }
+
+        // 4. 悬浮菜单：点击了“复制”
+        [RelayCommand]
+        private async Task CopyTextAsync()
+        {
+            if (!string.IsNullOrWhiteSpace(ExtractTargetParagraph))
+            {
+                await Clipboard.Default.SetTextAsync(ExtractTargetParagraph);
+            }
+            CloseAllMenus();
+        }
+
+        // 5. 工作台：保存带想法的笔记
+        [RelayCommand]
+        private async Task SaveNoteWithCommentAsync()
+        {
+            if (CurrentBook == null || CurrentChapter == null) return;
+            if (string.IsNullOrWhiteSpace(ExtractTargetParagraph)) return;
+
+            var note = new BookNote
+            {
+                Id = Guid.NewGuid(),
+                BookId = CurrentBook.Id,
+                ChapterId = CurrentChapter.Id,
+                BookTitle = CurrentBook.Title,
+                SelectedText = ExtractTargetParagraph,
+                UserComment = UserNoteInput,
+                Color = "#FFF9C4", // 手动写想法时，默认给一个浅黄色背景
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            await _noteRepository.AddAsync(note);
+            await RefreshHighlightingAsync();
+            CloseAllMenus();
+        }
+
+        [RelayCommand]
+        private void CloseAllMenus()
+        {
+            IsFloatingMenuVisible = false;
+            IsNoteOverlayVisible = false;
+        }
+
+        // ==================== 界面控制 ====================
         [RelayCommand] private async Task GoBackAsync() => await Shell.Current.GoToAsync("..");
         [RelayCommand] private void ToggleToc() { IsTocVisible = !IsTocVisible; if (IsTocVisible) IsMenuVisible = false; }
         [RelayCommand] private async Task SelectChapterAsync(BookChapter chapter) { if (chapter == null) return; IsTocVisible = false; IsMenuVisible = false; await LoadChapterIntoStreamAsync(chapter, clearStream: true); }
         [RelayCommand] private void IncreaseFont() { if (ReaderFontSize < 36) { ReaderFontSize += 2; Preferences.Default.Set("ReaderFontSize", ReaderFontSize); } }
         [RelayCommand] private void DecreaseFont() { if (ReaderFontSize > 12) { ReaderFontSize -= 2; Preferences.Default.Set("ReaderFontSize", ReaderFontSize); } }
+
         [RelayCommand]
         private void ChangeTheme(string themeType)
         {
@@ -329,6 +460,5 @@ namespace MonoRead.App.ViewModels
             PageBackgroundColor = Color.FromArgb(bgHex); TextPrimaryColor = Color.FromArgb(textHex); StatusTextColor = Color.FromArgb(statusHex);
             Preferences.Default.Set("ThemeBg", bgHex); Preferences.Default.Set("ThemeText", textHex); Preferences.Default.Set("ThemeStatus", statusHex);
         }
-        [RelayCommand] private void ChangeTextColor(string hexColor) { TextPrimaryColor = Color.FromArgb(hexColor); Preferences.Default.Set("ThemeText", hexColor); }
     }
 }
