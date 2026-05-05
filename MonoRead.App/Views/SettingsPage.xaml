@@ -72,7 +72,7 @@
                 </VerticalStackLayout>
 
                 <!-- 底部版本号声明 (可选，提升产品正规感) -->
-                <Label Text="MonoRead V1.0.0" 
+                <Label Text="MonoRead V1.6" 
                        FontSize="12" 
                        TextColor="#B2B2B2" 
                        HorizontalOptions="Center" 
