@@ -32,7 +32,7 @@ namespace MonoRead.App.ViewModels
         public Guid ChapterId { get; set; }
         public string Title { get; set; } = string.Empty;
         public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
-        public string PageIndicator { get; set; } = string.Empty; // 底部显示的 1/5 进度
+        public string PageIndicator { get; set; } = string.Empty;
     }
 
     [QueryProperty(nameof(BookIdString), "BookId")]
@@ -43,9 +43,6 @@ namespace MonoRead.App.ViewModels
         private readonly IReadingRecordRepository _recordRepository;
         private DateTime _sessionStartTime;
 
-        // =========================================================
-        // 【防重影核心】：解决 Transient ViewModel 的幽灵多开问题
-        // =========================================================
         private static Guid _activeInstanceId = Guid.Empty;
         private readonly Guid _myInstanceId = Guid.NewGuid();
 
@@ -68,7 +65,15 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private bool _isTocVisible = false;
         [ObservableProperty] private ObservableCollection<BookChapter> _chaptersList = new();
 
+        // =========================================================
+        // 【新增】：亮度与字体引擎状态
+        // =========================================================
         [ObservableProperty] private int _readerFontSize = Preferences.Default.Get("ReaderFontSize", 18);
+        [ObservableProperty] private string _readerFontFamily = Preferences.Default.Get("ReaderFontFamily", string.Empty);
+
+        // 亮度滑块 (0.01 到 1.0)
+        [ObservableProperty] private double _screenBrightness = Preferences.Default.Get("ReaderBrightness", 0.5);
+
         [ObservableProperty] private Color _pageBackgroundColor = Color.FromArgb(Preferences.Default.Get("ThemeBg", "#F4ECD8"));
         [ObservableProperty] private Color _textPrimaryColor = Color.FromArgb(Preferences.Default.Get("ThemeText", "#3E3222"));
         [ObservableProperty] private Color _statusTextColor = Color.FromArgb(Preferences.Default.Get("ThemeStatus", "#888888"));
@@ -86,27 +91,28 @@ namespace MonoRead.App.ViewModels
             _recordRepository = recordRepository;
 
             _sessionStartTime = DateTime.UtcNow;
-
-            // 【拦截器激活】：每次进入阅读器，最新实例强行霸占活跃权
             _activeInstanceId = _myInstanceId;
 
             IsScrollMode = Preferences.Default.Get("IsScrollMode", false);
 
+            // 初始应用一下保存的亮度
+            ApplyBrightness(ScreenBrightness);
+
             WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) =>
             {
-                if (_activeInstanceId != _myInstanceId) return; // 👻 幽灵退散
+                if (_activeInstanceId != _myInstanceId) return;
                 HandleMenuToggleRequest();
             });
 
             WeakReferenceMessenger.Default.Register<TextSelectionStartedMessage>(this, (r, m) =>
             {
-                if (_activeInstanceId != _myInstanceId) return; // 👻 幽灵退散
+                if (_activeInstanceId != _myInstanceId) return;
                 MainThread.BeginInvokeOnMainThread(() => IsMenuVisible = false);
             });
 
             WeakReferenceMessenger.Default.Register<GranularTextSelectedMessage>(this, async (r, m) =>
             {
-                if (_activeInstanceId != _myInstanceId) return; // 👻 幽灵退散！绝对禁止旧实例操作数据库！
+                if (_activeInstanceId != _myInstanceId) return;
 
                 ExtractTargetParagraph = m.SelectedText;
 
@@ -122,6 +128,43 @@ namespace MonoRead.App.ViewModels
                 }
                 else { await SaveHighlightSilentlyAsync(m.ActionCommand, m.SelectedText); }
             });
+        }
+
+        // =========================================================
+        // 【核心驱动】：监听滑块变化，无缝劫持 Android 原生窗口亮度
+        // =========================================================
+        partial void OnScreenBrightnessChanged(double value)
+        {
+            Preferences.Default.Set("ReaderBrightness", value);
+            ApplyBrightness(value);
+        }
+
+        private void ApplyBrightness(double value)
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+#if ANDROID
+                var activity = Microsoft.Maui.ApplicationModel.Platform.CurrentActivity;
+                if (activity?.Window != null)
+                {
+                    var attributes = activity.Window.Attributes;
+                    if (attributes != null)
+                    {
+                        // 强制将当前 App 窗口的亮度设置为滑块值，覆盖系统设置
+                        attributes.ScreenBrightness = (float)value;
+                        activity.Window.Attributes = attributes;
+                    }
+                }
+#endif
+            });
+        }
+
+        [RelayCommand]
+        private void ChangeFont(string fontName)
+        {
+            // 为空时代表跟随系统默认字体
+            ReaderFontFamily = fontName;
+            Preferences.Default.Set("ReaderFontFamily", fontName);
         }
 
         partial void OnBookIdStringChanged(string value)
@@ -153,7 +196,7 @@ namespace MonoRead.App.ViewModels
                                 if (savedChapter != null) targetChapter = savedChapter;
                             }
                         }
-                        catch (Exception ex) { LocalLogger.LogError($"进度解析异常: {ex.Message}"); }
+                        catch { }
                     }
 
                     await LoadChapterIntoStreamAsync(targetChapter, clearStream: true);
@@ -186,7 +229,7 @@ namespace MonoRead.App.ViewModels
                 string fileName = Path.GetFileName(CurrentBook.FilePath);
                 string actualDevicePath = Path.Combine(Microsoft.Maui.Storage.FileSystem.AppDataDirectory, fileName);
 
-                if (!File.Exists(actualDevicePath)) return "【文件缺失】未能找到该书籍的本地源文件。请确认云端备份是否完整包含了小说文件。";
+                if (!File.Exists(actualDevicePath)) return "【文件缺失】未能找到该书籍的本地源文件。";
 
                 int lengthToRead = endCharIndex == long.MaxValue ? 20000 : (int)(endCharIndex - startCharIndex);
                 if (lengthToRead <= 0) return "（本章暂无正文内容）";
@@ -236,18 +279,16 @@ namespace MonoRead.App.ViewModels
             {
                 if (occurrence.Index < currentIndex) continue;
                 if (occurrence.Index > currentIndex)
-                {
                     formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex, occurrence.Index - currentIndex) });
-                }
+
                 string colorHex = string.IsNullOrEmpty(occurrence.Note.Color) ? "#FFF9C4" : occurrence.Note.Color;
                 formattedString.Spans.Add(new Span { Text = occurrence.Note.SelectedText, BackgroundColor = Color.FromArgb(colorHex) });
                 currentIndex = occurrence.Index + occurrence.Note.SelectedText.Length;
             }
 
             if (currentIndex < paragraphText.Length)
-            {
                 formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex) });
-            }
+
             return formattedString;
         }
 
@@ -259,7 +300,6 @@ namespace MonoRead.App.ViewModels
             try
             {
                 string extractedContent = await ExtractChapterContentAsync(targetChapter);
-
                 var allBookNotes = await _noteRepository.GetNotesByBookIdAsync(CurrentBook.Id);
                 var chapterNotes = allBookNotes.Where(n => n.ChapterId == targetChapter.Id && !n.IsDeleted).ToList();
 
@@ -278,86 +318,56 @@ namespace MonoRead.App.ViewModels
                     if (IsScrollMode)
                     {
                         if (clearStream) ReadingStream.Clear();
-
                         var paragraphsUi = new List<ParagraphUiModel>();
-                        foreach (var text in rawParagraphs)
-                        {
-                            paragraphsUi.Add(new ParagraphUiModel { RawText = text, FormattedText = BuildFormattedParagraph(text, chapterNotes) });
-                        }
+                        foreach (var text in rawParagraphs) paragraphsUi.Add(new ParagraphUiModel { RawText = text, FormattedText = BuildFormattedParagraph(text, chapterNotes) });
 
-                        var newNode = new ReaderChapterNode
+                        ReadingStream.Add(new ReaderChapterNode
                         {
                             ChapterId = targetChapter.Id,
                             Title = targetChapter.Title,
                             Content = extractedContent,
                             Paragraphs = new ObservableCollection<ParagraphUiModel>(paragraphsUi)
-                        };
-                        ReadingStream.Add(newNode);
+                        });
                     }
                     else
                     {
                         if (clearStream) PagedStream.Clear();
-
                         int charsPerPage = 550;
-                        var domainPages = new List<ReaderPageNode>();
-                        int currentPageCharCount = 0;
+                        var domainPages = new List<ReaderPageUiModel>();
                         string currentPageContent = "";
+                        int currentCharCount = 0;
                         int pageIndex = 1;
 
                         foreach (var p in rawParagraphs)
                         {
                             currentPageContent += p + "\n";
-                            currentPageCharCount += p.Length;
+                            currentCharCount += p.Length;
 
-                            if (currentPageCharCount >= charsPerPage)
+                            if (currentCharCount >= charsPerPage)
                             {
-                                domainPages.Add(new ReaderPageNode
-                                {
-                                    ChapterId = targetChapter.Id,
-                                    ChapterTitle = targetChapter.Title,
-                                    Content = currentPageContent.TrimEnd('\n'),
-                                    PageIndex = pageIndex
-                                });
-                                pageIndex++;
+                                var uiPage = new ReaderPageUiModel { ChapterId = targetChapter.Id, Title = targetChapter.Title };
+                                foreach (var prp in currentPageContent.TrimEnd('\n').Split('\n'))
+                                    uiPage.Paragraphs.Add(new ParagraphUiModel { RawText = prp, FormattedText = BuildFormattedParagraph(prp, chapterNotes) });
+                                domainPages.Add(uiPage);
                                 currentPageContent = "";
-                                currentPageCharCount = 0;
+                                currentCharCount = 0;
+                                pageIndex++;
                             }
                         }
 
                         if (!string.IsNullOrWhiteSpace(currentPageContent))
                         {
-                            domainPages.Add(new ReaderPageNode
-                            {
-                                ChapterId = targetChapter.Id,
-                                ChapterTitle = targetChapter.Title,
-                                Content = currentPageContent.TrimEnd('\n'),
-                                PageIndex = pageIndex
-                            });
+                            var uiPage = new ReaderPageUiModel { ChapterId = targetChapter.Id, Title = targetChapter.Title };
+                            foreach (var prp in currentPageContent.TrimEnd('\n').Split('\n'))
+                                uiPage.Paragraphs.Add(new ParagraphUiModel { RawText = prp, FormattedText = BuildFormattedParagraph(prp, chapterNotes) });
+                            domainPages.Add(uiPage);
                         }
 
                         int totalPages = domainPages.Count;
-                        foreach (var dp in domainPages) dp.TotalPagesInChapter = totalPages;
-
-                        foreach (var dp in domainPages)
+                        for (int i = 0; i < totalPages; i++)
                         {
-                            var uiPage = new ReaderPageUiModel
-                            {
-                                ChapterId = dp.ChapterId,
-                                Title = dp.ChapterTitle,
-                                PageIndicator = $"{dp.PageIndex} / {dp.TotalPagesInChapter}"
-                            };
-
-                            var pageRawParagraphs = dp.Content.Split('\n');
-                            foreach (var prp in pageRawParagraphs)
-                            {
-                                uiPage.Paragraphs.Add(new ParagraphUiModel
-                                {
-                                    RawText = prp,
-                                    FormattedText = BuildFormattedParagraph(prp, chapterNotes)
-                                });
-                            }
-
-                            PagedStream.Add(uiPage);
+                            domainPages[i].PageIndicator = $"{i + 1} / {totalPages}";
+                            PagedStream.Add(domainPages[i]);
                         }
                     }
 
@@ -404,10 +414,8 @@ namespace MonoRead.App.ViewModels
         private async Task PreviousChapterAsync()
         {
             if (CurrentBook == null || IsLoading) return;
-
             var firstChapterId = IsScrollMode && ReadingStream.Any() ? ReadingStream.First().ChapterId :
                                  (!IsScrollMode && PagedStream.Any() ? PagedStream.First().ChapterId : Guid.Empty);
-
             var firstChapter = CurrentBook.Chapters.FirstOrDefault(c => c.Id == firstChapterId);
             if (firstChapter == null) return;
             var prevChapter = CurrentBook.Chapters.Where(c => c.SortOrder < firstChapter.SortOrder).OrderByDescending(c => c.SortOrder).FirstOrDefault();
@@ -418,10 +426,8 @@ namespace MonoRead.App.ViewModels
         private async Task NextChapterAsync()
         {
             if (CurrentBook == null || IsLoading) return;
-
             var lastChapterId = IsScrollMode && ReadingStream.Any() ? ReadingStream.Last().ChapterId :
                                 (!IsScrollMode && PagedStream.Any() ? PagedStream.Last().ChapterId : Guid.Empty);
-
             var lastChapter = CurrentBook.Chapters.FirstOrDefault(c => c.Id == lastChapterId);
             if (lastChapter == null) return;
             var nextChapter = CurrentBook.Chapters.Where(c => c.SortOrder > lastChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
@@ -464,6 +470,19 @@ namespace MonoRead.App.ViewModels
         [RelayCommand]
         private async Task GoBackAsync()
         {
+            // 退出时恢复系统默认亮度 (-1f)
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+#if ANDROID
+                var activity = Microsoft.Maui.ApplicationModel.Platform.CurrentActivity;
+                if (activity?.Window != null)
+                {
+                    var attributes = activity.Window.Attributes;
+                    if (attributes != null) { attributes.ScreenBrightness = -1f; activity.Window.Attributes = attributes; }
+                }
+#endif
+            });
+
             var duration = (int)(DateTime.UtcNow - _sessionStartTime).TotalSeconds;
             if (duration > 10) await _recordRepository.AddDurationAsync(DateTime.UtcNow, duration);
             await Shell.Current.GoToAsync("..");

@@ -29,6 +29,8 @@ namespace MonoRead.App
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+                    fonts.AddFont("simkai.ttf", "simkai");
+                    fonts.AddFont("simsun.ttf", "simsun");
                 });
 
             // ====================================================================
