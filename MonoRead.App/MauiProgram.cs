@@ -2,8 +2,6 @@
 using Android.Views;
 using Android.Widget;
 using Microsoft.Maui.Handlers;
-using MonoRead.App.Platforms.Android;
-using MonoRead.App.ViewModels;
 #endif
 
 using CommunityToolkit.Maui;
@@ -15,6 +13,7 @@ using MonoRead.Infrastructure;
 using MonoRead.Infrastructure.Services;
 using MonoRead.UseCase;
 using MonoRead.Infrastructure.services;
+using CommunityToolkit.Mvvm.Messaging;
 
 namespace MonoRead.App
 {
@@ -32,79 +31,63 @@ namespace MonoRead.App
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
 
-            // ==================== 核心体验升级：原生 Handler 劫持 ====================
+            // ====================================================================
+            // 【硬核架构升级】：接管 Android 原生拖拽选词，并篡改系统弹出菜单
+            // ====================================================================
             builder.ConfigureMauiHandlers(handlers =>
             {
 #if ANDROID
-                LabelHandler.Mapper.AppendToMapping("SelectableText", (handler, view) =>
+                LabelHandler.Mapper.AppendToMapping("GranularSelection", (handler, view) =>
                 {
-                    // 仅对标记了 "ReadingText" 样式的 Label 开启原生能力
                     if (view is Label label && label.StyleClass != null && label.StyleClass.Contains("ReadingText"))
                     {
                         var textView = handler.PlatformView;
-
-                        // 1. 开启原生水滴光标长按选择
+                        // 1. 开启原生长按拖拽水滴光标
                         textView.SetTextIsSelectable(true);
-
-                        // 2. 劫持系统默认的复制悬浮菜单
+                        // 2. 注入我们篡改过的菜单拦截器
                         textView.CustomSelectionActionModeCallback = new MonoReadActionModeCallback(textView);
-
-                        // 3. 【核心修复】：使用 textView.Context 替代 handler.Context，突破 MAUI 接口限制
-                        textView.SetOnTouchListener(new ReadingTouchListener(textView.Context));
                     }
                 });
 #endif
             });
 
-            // ==================== 基础设施与数据库 ====================
             builder.Services.AddDbContext<AppDbContext>(options =>
             {
-                // 使用绝对路径获取存储目录，规避跨平台路径解析差异
                 string dbPath = Path.Combine(Microsoft.Maui.Storage.FileSystem.AppDataDirectory, "monoread.db3");
                 options.UseSqlite($"Data Source={dbPath}");
             });
             builder.Services.AddSingleton<IFileSystemService, FileSystemService>();
 
-            // ==================== 应用层 UseCase 与 仓储 ====================
             builder.Services.AddScoped<IBookRepository, BookRepository>();
             builder.Services.AddScoped<IFolderRepository, FolderRepository>();
             builder.Services.AddScoped<IBookParsingUseCase, BookParsingUseCase>();
             builder.Services.AddScoped<IBookNoteRepository, BookNoteRepository>();
 
-            // ==================== 视图与 ViewModel 注册 ====================
-            // 底部 TabBar 一级主模块
             builder.Services.AddTransient<RecentViewModel>();
             builder.Services.AddTransient<RecentPage>();
-
             builder.Services.AddTransient<LibraryViewModel>();
             builder.Services.AddTransient<LibraryPage>();
-
             builder.Services.AddTransient<NotesViewModel>();
             builder.Services.AddTransient<NotesPage>();
-
             builder.Services.AddTransient<SettingsViewModel>();
             builder.Services.AddTransient<SettingsPage>();
 
-            // 深度路由二级业务模块
             builder.Services.AddTransient<ReaderViewModel>();
             builder.Services.AddTransient<ReaderPage>();
             builder.Services.AddTransient<BookNotesDetailPage>();
             builder.Services.AddTransient<BookNotesDetailViewModel>();
-
-            builder.Services.AddTransient<TrashViewModel>(); 
+            builder.Services.AddTransient<TrashViewModel>();
             builder.Services.AddTransient<TrashPage>();
-
 
             builder.Services.AddSingleton<MonoRead.Core.Interfaces.ICloudStorageService, MonoRead.Infrastructure.Services.WebDavStorageService>();
             builder.Services.AddTransient<MonoRead.App.ViewModels.CloudBackupViewModel>();
             builder.Services.AddTransient<MonoRead.App.Views.CloudBackupPage>();
-
             builder.Services.AddTransient<MonoRead.App.ViewModels.CloudFilePickerViewModel>();
             builder.Services.AddTransient<MonoRead.App.Views.CloudFilePickerPage>();
-            // 在 builder.Services 的地方追加这两行：
+
             builder.Services.AddSingleton<IZipArchiveService, MonoRead.Infrastructure.Services.ZipArchiveService>();
             builder.Services.AddSingleton<MonoRead.UseCase.ICloudBackupUseCase, MonoRead.UseCase.CloudBackupUseCase>();
-            // ==================== 数据库自动迁移建表 ====================
+
             var app = builder.Build();
             using (var scope = app.Services.CreateScope())
             {
@@ -115,4 +98,64 @@ namespace MonoRead.App
             return app;
         }
     }
+
+#if ANDROID
+    // ====================================================================
+    // 🔪 Android 系统菜单拦截器 (驻留在底层)
+    // ====================================================================
+    public class MonoReadActionModeCallback : Java.Lang.Object, ActionMode.ICallback
+    {
+        private readonly TextView _textView;
+
+        public MonoReadActionModeCallback(TextView textView)
+        {
+            _textView = textView;
+        }
+
+        public bool OnCreateActionMode(ActionMode mode, IMenu menu)
+        {
+            menu.Clear(); // 杀掉系统自带的复制/全选
+
+            // 植入我们的极简调色盘和操作按钮 (使用 Emoji 呈现极致 UI)
+            menu.Add(0, 1, 0, "🟨").SetShowAsAction(ShowAsAction.Always);
+            menu.Add(0, 2, 1, "🟩").SetShowAsAction(ShowAsAction.Always);
+            menu.Add(0, 3, 2, "🟦").SetShowAsAction(ShowAsAction.Always);
+            menu.Add(0, 4, 3, "📝 想法").SetShowAsAction(ShowAsAction.Always);
+            menu.Add(0, 5, 4, "复制").SetShowAsAction(ShowAsAction.Always);
+            return true;
+        }
+
+        public bool OnPrepareActionMode(ActionMode mode, IMenu menu) => false;
+
+        public bool OnActionItemClicked(ActionMode mode, IMenuItem item)
+        {
+            int start = _textView.SelectionStart;
+            int end = _textView.SelectionEnd;
+            if (start < 0 || end < 0 || start == end) return false;
+
+            if (start > end) { int temp = start; start = end; end = temp; }
+            string selectedText = _textView.Text.Substring(start, end - start);
+
+            string action = item.ItemId switch
+            {
+                1 => "#FFF9C4", // 黄
+                2 => "#E8F5E9", // 绿
+                3 => "#E3F2FD", // 蓝
+                4 => "NOTE",
+                5 => "COPY",
+                _ => ""
+            };
+
+            // 发射跨端消息，把选中的字和动作传给 MAUI 的 ReaderViewModel
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(
+                new GranularTextSelectedMessage(selectedText, action));
+
+            mode.Finish(); // 关闭黑底菜单
+            _textView.ClearFocus(); // 取消文字的选中状态
+            return true;
+        }
+
+        public void OnDestroyActionMode(ActionMode mode) { }
+    }
+#endif
 }

@@ -12,12 +12,16 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
 
 namespace MonoRead.App.ViewModels
 {
+    // ==================== 跨域消息实体定义 ====================
     public record MenuToggleRequestedMessage();
     public record TextSelectionStartedMessage();
-    public record TextSelectedMessage(string SelectedText);
+
+    // 【新增】：接收底层原生菜单传来的精细选中内容和操作指令
+    public record GranularTextSelectedMessage(string SelectedText, string ActionCommand);
 
     public partial class ParagraphUiModel : ObservableObject
     {
@@ -61,8 +65,8 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private Color _statusTextColor = Color.FromArgb(Preferences.Default.Get("ThemeStatus", "#888888"));
 
         // ==================== 极简操作台状态机 ====================
-        [ObservableProperty] private bool _isFloatingMenuVisible = false; // 悬浮菜单
-        [ObservableProperty] private bool _isNoteOverlayVisible = false;  // 写想法工作台
+        // 注：IsFloatingMenuVisible 已废弃，由 Android 原生菜单接管
+        [ObservableProperty] private bool _isNoteOverlayVisible = false;  // 深度写想法工作台
         [ObservableProperty] private string _extractTargetParagraph = string.Empty;
         [ObservableProperty] private string _userNoteInput = string.Empty;
 
@@ -74,18 +78,34 @@ namespace MonoRead.App.ViewModels
             _noteRepository = noteRepository;
 
             WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) => HandleMenuToggleRequest());
+
+            // 选词开始时，隐藏我们的设置菜单，防止遮挡
             WeakReferenceMessenger.Default.Register<TextSelectionStartedMessage>(this, (r, m) => MainThread.BeginInvokeOnMainThread(() => IsMenuVisible = false));
-            WeakReferenceMessenger.Default.Register<TextSelectedMessage>(this, (r, m) =>
+
+            // 【核心枢纽】：监听 Android 底层原生菜单传来的指令
+            WeakReferenceMessenger.Default.Register<GranularTextSelectedMessage>(this, async (r, m) =>
             {
-                MainThread.BeginInvokeOnMainThread(() =>
+                ExtractTargetParagraph = m.SelectedText;
+
+                if (m.ActionCommand == "COPY")
                 {
-                    if (!string.IsNullOrWhiteSpace(m.SelectedText))
+                    await Clipboard.Default.SetTextAsync(m.SelectedText);
+                }
+                else if (m.ActionCommand == "NOTE")
+                {
+                    // 呼出写想法的工作台
+                    MainThread.BeginInvokeOnMainThread(() =>
                     {
-                        ExtractTargetParagraph = m.SelectedText;
+                        UserNoteInput = string.Empty;
+                        IsNoteOverlayVisible = true;
                         IsMenuVisible = false;
-                        IsFloatingMenuVisible = true; // 拦截系统选词，弹出极简菜单
-                    }
-                });
+                    });
+                }
+                else
+                {
+                    // 传过来的是颜色十六进制代码，直接静默保存
+                    await SaveHighlightSilentlyAsync(m.ActionCommand, m.SelectedText);
+                }
             });
         }
 
@@ -334,8 +354,7 @@ namespace MonoRead.App.ViewModels
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                // 如果有任何弹出菜单开着，优先把它关掉，而不呼出主菜单
-                if (IsNoteOverlayVisible || IsFloatingMenuVisible)
+                if (IsNoteOverlayVisible)
                 {
                     CloseAllMenus();
                     return;
@@ -348,24 +367,11 @@ namespace MonoRead.App.ViewModels
         }
 
         // ====================================================================
-        // 【核心操作分流】：悬浮菜单的各类交互
+        // 【核心落地】：底层菜单传来的静默划线保存
         // ====================================================================
-
-        // 1. 双击段落：提取文字并呼出【极简悬浮菜单】
-        [RelayCommand]
-        private void OpenFloatingMenu(string rawParagraphText)
+        private async Task SaveHighlightSilentlyAsync(string colorHex, string selectedText)
         {
-            ExtractTargetParagraph = rawParagraphText;
-            IsMenuVisible = false;
-            IsFloatingMenuVisible = true;
-        }
-
-        // 2. 悬浮菜单：点击了颜色圆点（默默存入，刷新高亮）
-        [RelayCommand]
-        private async Task SaveHighlightSilentlyAsync(string colorHex)
-        {
-            if (CurrentBook == null || CurrentChapter == null) return;
-            if (string.IsNullOrWhiteSpace(ExtractTargetParagraph)) return;
+            if (CurrentBook == null || CurrentChapter == null || string.IsNullOrWhiteSpace(selectedText)) return;
 
             var note = new BookNote
             {
@@ -373,45 +379,28 @@ namespace MonoRead.App.ViewModels
                 BookId = CurrentBook.Id,
                 ChapterId = CurrentChapter.Id,
                 BookTitle = CurrentBook.Title,
-                SelectedText = ExtractTargetParagraph,
-                UserComment = string.Empty,  // 【核心】：想法为空
-                Color = colorHex,            // 【核心】：记录选中的莫兰迪色
+                SelectedText = selectedText,
+                UserComment = string.Empty,  // 想法为空
+                Color = colorHex,            // 记录选中的莫兰迪色
                 CreatedAt = DateTime.UtcNow,
                 IsDeleted = false
             };
 
             await _noteRepository.AddAsync(note);
             await RefreshHighlightingAsync();
-
-            CloseAllMenus(); // 操作完成，深藏功与名
         }
 
-        // 3. 悬浮菜单：点击了“写想法” -> 转入工作台
         [RelayCommand]
-        private void OpenNoteWorkbench()
+        private void CloseAllMenus()
         {
-            IsFloatingMenuVisible = false;
-            UserNoteInput = string.Empty;
-            IsNoteOverlayVisible = true; // 展开深度编辑台
+            IsNoteOverlayVisible = false;
         }
 
-        // 4. 悬浮菜单：点击了“复制”
-        [RelayCommand]
-        private async Task CopyTextAsync()
-        {
-            if (!string.IsNullOrWhiteSpace(ExtractTargetParagraph))
-            {
-                await Clipboard.Default.SetTextAsync(ExtractTargetParagraph);
-            }
-            CloseAllMenus();
-        }
-
-        // 5. 工作台：保存带想法的笔记
+        // 深度工作台：保存带想法的笔记
         [RelayCommand]
         private async Task SaveNoteWithCommentAsync()
         {
-            if (CurrentBook == null || CurrentChapter == null) return;
-            if (string.IsNullOrWhiteSpace(ExtractTargetParagraph)) return;
+            if (CurrentBook == null || CurrentChapter == null || string.IsNullOrWhiteSpace(ExtractTargetParagraph)) return;
 
             var note = new BookNote
             {
@@ -429,13 +418,6 @@ namespace MonoRead.App.ViewModels
             await _noteRepository.AddAsync(note);
             await RefreshHighlightingAsync();
             CloseAllMenus();
-        }
-
-        [RelayCommand]
-        private void CloseAllMenus()
-        {
-            IsFloatingMenuVisible = false;
-            IsNoteOverlayVisible = false;
         }
 
         // ==================== 界面控制 ====================
