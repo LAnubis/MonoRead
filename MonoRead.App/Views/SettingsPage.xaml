@@ -4,138 +4,121 @@
              x:Class="MonoRead.App.Views.SettingsPage"
              Shell.NavBarIsVisible="False"
              Title="设置"
-             BackgroundColor="#F5F5F5">
-    <!-- 微信读书设置页底色通常为浅灰 -->
+             BackgroundColor="#F7F7F7">
+    <!-- 更柔和的全局浅灰底色 -->
 
     <Grid RowDefinitions="Auto, *">
 
         <!-- 顶部大标题区域 -->
-        <Grid Grid.Row="0" Padding="20,40,20,20" BackgroundColor="#F5F5F5">
-            <Label Text="设置" FontSize="28" FontAttributes="Bold" TextColor="#333333" VerticalOptions="Center" />
+        <Grid Grid.Row="0" Padding="20,50,20,15" BackgroundColor="#F7F7F7">
+            <Label Text="设置" FontSize="30" FontAttributes="Bold" TextColor="#333333" VerticalOptions="Center" />
         </Grid>
 
         <!-- 设置项列表区 -->
         <ScrollView Grid.Row="1" VerticalScrollBarVisibility="Never">
-            <VerticalStackLayout Spacing="0">
+            <VerticalStackLayout Spacing="0" Padding="0,0,0,40">
 
-                <!-- ==================== 新增：阅读统计与日历热力图卡片 ==================== -->
-                <Border BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 12" StrokeThickness="0" Margin="20,0,20,20" Padding="20">
+                <!-- ==================== 阅读统计卡片 ==================== -->
+                <!-- 利用阴影和圆角打造微凸起的高级卡片感 -->
+                <Border BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 16" StrokeThickness="0" Margin="20,10,20,30" Padding="25">
                     <Border.Shadow>
-                        <Shadow Brush="#000000" Offset="0,4" Radius="10" Opacity="0.05" />
+                        <Shadow Brush="#000000" Offset="0,6" Radius="15" Opacity="0.04" />
                     </Border.Shadow>
 
-                    <VerticalStackLayout Spacing="15">
-
-                        <!-- 顶部数据汇总 -->
+                    <VerticalStackLayout Spacing="20">
                         <Grid ColumnDefinitions="*, *">
-                            <VerticalStackLayout Grid.Column="0">
-                                <Label Text="累计阅读" FontSize="12" TextColor="#999999" />
+                            <VerticalStackLayout Grid.Column="0" Spacing="4">
+                                <Label Text="累计阅读" FontSize="13" TextColor="#999999" />
                                 <HorizontalStackLayout VerticalOptions="End">
-                                    <Label Text="{Binding TotalReadMinutes}" FontSize="28" FontAttributes="Bold" TextColor="#333333" />
-                                    <Label Text=" 分钟" FontSize="12" TextColor="#999999" VerticalOptions="End" Margin="0,0,0,5" />
+                                    <Label Text="{Binding TotalReadMinutes}" FontSize="32" FontFamily="Arial" FontAttributes="Bold" TextColor="#333333" />
+                                    <Label Text=" 分钟" FontSize="12" TextColor="#999999" VerticalOptions="End" Margin="2,0,0,6" />
                                 </HorizontalStackLayout>
                             </VerticalStackLayout>
 
-                            <VerticalStackLayout Grid.Column="1">
-                                <Label Text="连续打卡" FontSize="12" TextColor="#999999" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                <Label Text="连续打卡" FontSize="13" TextColor="#999999" />
                                 <HorizontalStackLayout VerticalOptions="End">
-                                    <Label Text="{Binding ContinuousReadDays}" FontSize="28" FontAttributes="Bold" TextColor="#D1A67B" />
-                                    <Label Text=" 天" FontSize="12" TextColor="#999999" VerticalOptions="End" Margin="0,0,0,5" />
+                                    <Label Text="{Binding ContinuousReadDays}" FontSize="32" FontFamily="Arial" FontAttributes="Bold" TextColor="#D1A67B" />
+                                    <Label Text=" 天" FontSize="12" TextColor="#999999" VerticalOptions="End" Margin="2,0,0,6" />
                                 </HorizontalStackLayout>
                             </VerticalStackLayout>
                         </Grid>
 
-                        <BoxView HeightRequest="1" Color="#F0F0F0" Margin="0,5"/>
+                        <BoxView HeightRequest="1" Color="#F5F5F5" />
 
-                        <!-- GitHub 绿点热力图 -->
-                        <Label Text="过去 90 天阅读分布" FontSize="12" TextColor="#AAAAAA" Margin="0,0,0,5"/>
-                        <FlexLayout BindableLayout.ItemsSource="{Binding HeatBoxes}" 
-                                    Wrap="Wrap" 
-                                    Direction="Row" 
-                                    JustifyContent="Start" 
-                                    AlignItems="Start">
-                            <BindableLayout.ItemTemplate>
-                                <DataTemplate>
-                                    <!-- 每个代表一天的小方块 -->
-                                    <BoxView WidthRequest="12" 
-                                             HeightRequest="12" 
-                                             Color="{Binding ColorHex}" 
-                                             CornerRadius="2" 
-                                             Margin="2" 
-                                             ToolTipProperties.Text="{Binding Tooltip}" />
-                                </DataTemplate>
-                            </BindableLayout.ItemTemplate>
-                        </FlexLayout>
-
+                        <!-- GitHub 绿点热力图占位区 -->
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="过去 90 天阅读分布" FontSize="12" TextColor="#AAAAAA" />
+                            <FlexLayout BindableLayout.ItemsSource="{Binding HeatBoxes}" Wrap="Wrap" Direction="Row" JustifyContent="Start">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate>
+                                        <BoxView WidthRequest="12" HeightRequest="12" Color="{Binding ColorHex}" CornerRadius="2" Margin="2" />
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </FlexLayout>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- ==================== 新增：阅读偏好设置 ==================== -->
-                <Label Text="阅读体验" FontSize="13" TextColor="#999999" Margin="25,0,0,10" />
+                <!-- ==================== 模块 1：阅读体验 ==================== -->
+                <Label Text="阅读体验" FontSize="13" TextColor="#999999" Margin="20,0,0,8" />
                 <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,25">
-                    <Grid Padding="20,12" ColumnDefinitions="Auto, *, Auto">
-                        <Label Grid.Column="0" Text="📜" FontSize="18" VerticalOptions="Center" Margin="0,0,15,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                    <Grid Padding="20,15" ColumnDefinitions="Auto, *, Auto">
+                        <Label Grid.Column="0" Text="📜" FontSize="20" VerticalOptions="Center" Margin="0,0,15,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
                             <Label Text="启用瀑布流模式" FontSize="16" TextColor="#333333" />
-                            <Label Text="关闭时为左右翻页模式" FontSize="11" TextColor="#999999" Margin="0,2,0,0"/>
+                            <Label Text="关闭时为沉浸式左右翻页" FontSize="12" TextColor="#999999" />
                         </VerticalStackLayout>
-                        <!-- 核心开关，绑定 ViewModel -->
                         <Switch Grid.Column="2" IsToggled="{Binding IsScrollMode}" OnColor="#D1A67B" VerticalOptions="Center" />
                     </Grid>
                 </VerticalStackLayout>
 
-                <!-- ==================== 模块组 1：数据管理 ==================== -->
-                <Label Text="数据与系统" FontSize="13" TextColor="#999999" Margin="25,0,0,10" />
-                <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,15">
+                <!-- ==================== 模块 2：数据与系统 ==================== -->
+                <Label Text="数据与系统" FontSize="13" TextColor="#999999" Margin="20,0,0,8" />
+                <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,25">
 
-                    <!-- Item 1: 回收站 -->
-                    <Grid Padding="20,16" ColumnDefinitions="Auto, *, Auto">
+                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding GoToTrashCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="🗑️" FontSize="18" VerticalOptions="Center" Margin="0,0,15,0"/>
+                        <Label Grid.Column="0" Text="🗑️" FontSize="20" VerticalOptions="Center" Margin="0,0,15,0"/>
                         <Label Grid.Column="1" Text="回收站" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
-                        <Label Grid.Column="2" Text=">" FontSize="16" TextColor="#B2B2B2" VerticalOptions="Center" FontAttributes="Bold"/>
+                        <Label Grid.Column="2" Text="〉" FontSize="14" TextColor="#CCCCCC" VerticalOptions="Center" />
                     </Grid>
 
-                    <!-- 分割线 -->
-                    <BoxView HeightRequest="1" Color="#F0F0F0" Margin="20,0,0,0" HorizontalOptions="FillAndExpand" />
-                    <Grid Padding="20,16" ColumnDefinitions="Auto, *, Auto">
+                    <BoxView HeightRequest="1" Color="#F7F7F7" Margin="55,0,0,0" />
+
+                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding GoToCloudBackupCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="☁️" FontSize="18" VerticalOptions="Center" Margin="0,0,15,0"/>
-                        <Label Grid.Column="1" Text="云端备份 (坚果云)" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
-                        <Label Grid.Column="2" Text=">" FontSize="16" TextColor="#B2B2B2" VerticalOptions="Center" FontAttributes="Bold"/>
+                        <Label Grid.Column="0" Text="☁️" FontSize="20" VerticalOptions="Center" Margin="0,0,15,0"/>
+                        <Label Grid.Column="1" Text="云端备份 (WebDAV)" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
+                        <Label Grid.Column="2" Text="〉" FontSize="14" TextColor="#CCCCCC" VerticalOptions="Center" />
                     </Grid>
 
-                    <!-- 分割线 -->
-                    <BoxView HeightRequest="1" Color="#F0F0F0" Margin="20,0,0,0" HorizontalOptions="FillAndExpand" />
-                    <!-- Item 2: 导出崩溃日志 -->
-                    <Grid Padding="20,16" ColumnDefinitions="Auto, *, Auto">
+                    <BoxView HeightRequest="1" Color="#F7F7F7" Margin="55,0,0,0" />
+
+                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding ExportLogCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="📝" FontSize="18" VerticalOptions="Center" Margin="0,0,15,0"/>
+                        <Label Grid.Column="0" Text="📝" FontSize="20" VerticalOptions="Center" Margin="0,0,15,0"/>
                         <Label Grid.Column="1" Text="导出日志" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
-                        <Label Grid.Column="2" Text=">" FontSize="16" TextColor="#B2B2B2" VerticalOptions="Center" FontAttributes="Bold"/>
+                        <Label Grid.Column="2" Text="〉" FontSize="14" TextColor="#CCCCCC" VerticalOptions="Center" />
                     </Grid>
-
                 </VerticalStackLayout>
 
-                <!-- ==================== 模块组 2：关于 ==================== -->
+                <!-- ==================== 模块 3：关于 ==================== -->
                 <VerticalStackLayout BackgroundColor="#FFFFFF">
-
-                    <!-- Item 3: 关于我们 -->
-                    <Grid Padding="20,16" ColumnDefinitions="Auto, *, Auto">
+                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding GoToAboutUsCommand}" />
                         </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="ℹ️" FontSize="18" VerticalOptions="Center" Margin="0,0,15,0"/>
+                        <Label Grid.Column="0" Text="✨" FontSize="20" VerticalOptions="Center" Margin="0,0,15,0"/>
                         <Label Grid.Column="1" Text="关于我们" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
-                        <Label Grid.Column="2" Text=">" FontSize="16" TextColor="#B2B2B2" VerticalOptions="Center" FontAttributes="Bold"/>
+                        <Label Grid.Column="2" Text="〉" FontSize="14" TextColor="#CCCCCC" VerticalOptions="Center" />
                     </Grid>
-
                 </VerticalStackLayout>
 
             </VerticalStackLayout>

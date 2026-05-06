@@ -6,32 +6,49 @@
              Shell.TabBarIsVisible="False"
              BackgroundColor="#FFFFFF">
 
-    <Grid RowDefinitions="Auto, *">
-
+    <Grid RowDefinitions="Auto, *, Auto">
         <!-- 顶部导航栏 -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,40,15,15" BackgroundColor="#FFFFFF">
-            <Grid Grid.Column="0" Padding="10" BackgroundColor="Transparent">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,50,15,10" BackgroundColor="#FFFFFF">
+            <Grid Grid.Column="0" Padding="10,5" BackgroundColor="Transparent">
                 <Grid.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type Shell}}, Path=CurrentItem.Navigation.PopAsync}" />
+                    <!-- 【修改这里】：去掉复杂的 Binding，改成极其稳定的 Tapped 事件 -->
+                    <TapGestureRecognizer Tapped="OnBackTapped" />
                 </Grid.GestureRecognizers>
                 <Label Text="← 返回" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
             </Grid>
-            <Label Grid.Column="1" Text="关于我们" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center"/>
-            <ContentView Grid.Column="2" WidthRequest="50"/>
+            <ContentView Grid.Column="2" WidthRequest="60"/>
         </Grid>
 
-        <!-- 核心内容区：大面积留白，垂直居中排布 -->
-        <VerticalStackLayout Grid.Row="1" VerticalOptions="Center" HorizontalOptions="Center" Spacing="8">
+        <!-- 核心内容区：品牌与宣言 -->
+        <VerticalStackLayout Grid.Row="1" VerticalOptions="Center" HorizontalOptions="Center" Spacing="0">
+
+            <!-- 替换为真实的 SVG 图标 (注意扩展名要写 .png) -->
+            <Border WidthRequest="90" HeightRequest="90" StrokeShape="RoundRectangle 20" StrokeThickness="0" HorizontalOptions="Center" Margin="0,0,0,20" BackgroundColor="Transparent">
+                <Border.Shadow>
+                    <Shadow Brush="#000000" Offset="0,5" Radius="15" Opacity="0.1" />
+                </Border.Shadow>
+
+                <Image Source="app_logo.png" Aspect="AspectFit" />
+
+            </Border>
+
             <!-- 产品信息 -->
-            <Label Text="FableReader" FontSize="26" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" />
-            <Label Text="V1.7" FontSize="14" TextColor="#999999" HorizontalOptions="Center" Margin="0,0,0,20"/>
+            <Label Text="FableReader" FontSize="26" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" Margin="0,0,0,5" />
+            <Label Text="Version 1.7" FontSize="13" FontFamily="Arial" TextColor="#A0A0A0" HorizontalOptions="Center" Margin="0,0,0,40"/>
 
-            <!-- 扩展字段 -->
-            <Label Text="研发作者: Dr.Shawn" FontSize="15" TextColor="#666666" HorizontalOptions="Center" />
-
-            <!-- 版权声明 (置于偏底部) -->
-            <Label Text="Copyright © 2026" FontSize="12" TextColor="#B2B2B2" HorizontalOptions="Center" Margin="0,50,0,0"/>
+            <!-- 开发者宣言 -->
+            <VerticalStackLayout Spacing="8" Margin="30,0">
+                <Label Text="「在喧嚣的数字世界中，" FontSize="15" TextColor="#666666" HorizontalOptions="Center" />
+                <Label Text="为你保留最后一块纯净的阅读自留地。」" FontSize="15" TextColor="#666666" HorizontalOptions="Center" />
+            </VerticalStackLayout>
 
         </VerticalStackLayout>
+
+        <!-- 底部版权声明 -->
+        <VerticalStackLayout Grid.Row="2" Margin="0,0,0,40" Spacing="4">
+            <Label Text="Designed &amp; Developed by Dr.Shawn" FontSize="12" TextColor="#B2B2B2" HorizontalOptions="Center" />
+            <Label Text="Copyright © 2026 MonoRead. All Rights Reserved." FontSize="11" TextColor="#CCCCCC" HorizontalOptions="Center" />
+        </VerticalStackLayout>
+
     </Grid>
 </ContentPage>
