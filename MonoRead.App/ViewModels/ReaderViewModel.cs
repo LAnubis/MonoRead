@@ -8,7 +8,6 @@ using System.Collections.ObjectModel;
 
 namespace MonoRead.App.ViewModels
 {
-    // ==================== 跨域消息实体定义 ====================
     public record MenuToggleRequestedMessage();
     public record TextSelectionStartedMessage();
     public record GranularTextSelectedMessage(string SelectedText, string ActionCommand);
@@ -65,13 +64,9 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private bool _isTocVisible = false;
         [ObservableProperty] private ObservableCollection<BookChapter> _chaptersList = new();
 
-        // =========================================================
-        // 【新增】：亮度与字体引擎状态
-        // =========================================================
         [ObservableProperty] private int _readerFontSize = Preferences.Default.Get("ReaderFontSize", 18);
         [ObservableProperty] private string _readerFontFamily = Preferences.Default.Get("ReaderFontFamily", string.Empty);
 
-        // 亮度滑块 (0.01 到 1.0)
         [ObservableProperty] private double _screenBrightness = Preferences.Default.Get("ReaderBrightness", 0.5);
 
         [ObservableProperty] private Color _pageBackgroundColor = Color.FromArgb(Preferences.Default.Get("ThemeBg", "#F4ECD8"));
@@ -95,7 +90,6 @@ namespace MonoRead.App.ViewModels
 
             IsScrollMode = Preferences.Default.Get("IsScrollMode", false);
 
-            // 初始应用一下保存的亮度
             ApplyBrightness(ScreenBrightness);
 
             WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) =>
@@ -113,9 +107,7 @@ namespace MonoRead.App.ViewModels
             WeakReferenceMessenger.Default.Register<GranularTextSelectedMessage>(this, async (r, m) =>
             {
                 if (_activeInstanceId != _myInstanceId) return;
-
                 ExtractTargetParagraph = m.SelectedText;
-
                 if (m.ActionCommand == "COPY") { await Clipboard.Default.SetTextAsync(m.SelectedText); }
                 else if (m.ActionCommand == "NOTE")
                 {
@@ -130,9 +122,6 @@ namespace MonoRead.App.ViewModels
             });
         }
 
-        // =========================================================
-        // 【核心驱动】：监听滑块变化，无缝劫持 Android 原生窗口亮度
-        // =========================================================
         partial void OnScreenBrightnessChanged(double value)
         {
             Preferences.Default.Set("ReaderBrightness", value);
@@ -150,7 +139,6 @@ namespace MonoRead.App.ViewModels
                     var attributes = activity.Window.Attributes;
                     if (attributes != null)
                     {
-                        // 强制将当前 App 窗口的亮度设置为滑块值，覆盖系统设置
                         attributes.ScreenBrightness = (float)value;
                         activity.Window.Attributes = attributes;
                     }
@@ -159,12 +147,16 @@ namespace MonoRead.App.ViewModels
             });
         }
 
+        // ==============================================================================
+        // 【核心修复 Bug 1】：强制重构富文本引擎，让字体立刻生效
+        // ==============================================================================
         [RelayCommand]
-        private void ChangeFont(string fontName)
+        private async Task ChangeFontAsync(string fontName)
         {
-            // 为空时代表跟随系统默认字体
             ReaderFontFamily = fontName;
-            Preferences.Default.Set("ReaderFontFamily", fontName);
+            Preferences.Default.Set("ReaderFontFamily", fontName ?? string.Empty);
+            // 呼叫刷新管线，重建底层的 FormattedString
+            await RefreshHighlightingAsync();
         }
 
         partial void OnBookIdStringChanged(string value)
@@ -258,11 +250,15 @@ namespace MonoRead.App.ViewModels
         private FormattedString BuildFormattedParagraph(string paragraphText, List<BookNote> chapterNotes)
         {
             var formattedString = new FormattedString();
+
+            // 【核心修复 Bug 1】：为每一个富文本切片注入当前字体
+            string fontToUse = string.IsNullOrWhiteSpace(ReaderFontFamily) ? null : ReaderFontFamily;
+
             var matchedNotes = chapterNotes.Where(n => !string.IsNullOrWhiteSpace(n.SelectedText) && paragraphText.Contains(n.SelectedText)).ToList();
 
             if (!matchedNotes.Any())
             {
-                formattedString.Spans.Add(new Span { Text = paragraphText });
+                formattedString.Spans.Add(new Span { Text = paragraphText, FontFamily = fontToUse });
                 return formattedString;
             }
 
@@ -279,15 +275,15 @@ namespace MonoRead.App.ViewModels
             {
                 if (occurrence.Index < currentIndex) continue;
                 if (occurrence.Index > currentIndex)
-                    formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex, occurrence.Index - currentIndex) });
+                    formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex, occurrence.Index - currentIndex), FontFamily = fontToUse });
 
                 string colorHex = string.IsNullOrEmpty(occurrence.Note.Color) ? "#FFF9C4" : occurrence.Note.Color;
-                formattedString.Spans.Add(new Span { Text = occurrence.Note.SelectedText, BackgroundColor = Color.FromArgb(colorHex) });
+                formattedString.Spans.Add(new Span { Text = occurrence.Note.SelectedText, BackgroundColor = Color.FromArgb(colorHex), FontFamily = fontToUse });
                 currentIndex = occurrence.Index + occurrence.Note.SelectedText.Length;
             }
 
             if (currentIndex < paragraphText.Length)
-                formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex) });
+                formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex), FontFamily = fontToUse });
 
             return formattedString;
         }
@@ -470,7 +466,6 @@ namespace MonoRead.App.ViewModels
         [RelayCommand]
         private async Task GoBackAsync()
         {
-            // 退出时恢复系统默认亮度 (-1f)
             MainThread.BeginInvokeOnMainThread(() =>
             {
 #if ANDROID

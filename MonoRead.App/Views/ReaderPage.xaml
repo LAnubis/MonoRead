@@ -10,18 +10,12 @@
 
     <Grid>
         <!-- ==================== 图层 1A：传统瀑布流阅读区 ==================== -->
-        <!-- 通过 IsScrollMode 开关控制显示 -->
         <Grid RowDefinitions="*, Auto" IsVisible="{Binding IsScrollMode}">
-
-            <CollectionView Grid.Row="0"
-                            ItemsSource="{Binding ReadingStream}"
-                            RemainingItemsThreshold="0"
-                            RemainingItemsThresholdReachedCommand="{Binding LoadNextChapterSeamlesslyCommand}"
-                            SelectionMode="None">
+            <CollectionView Grid.Row="0" ItemsSource="{Binding ReadingStream}" RemainingItemsThreshold="0" RemainingItemsThresholdReachedCommand="{Binding LoadNextChapterSeamlesslyCommand}" SelectionMode="None">
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
+                        <!-- 段落留白处依然保留唤醒能力 -->
                         <VerticalStackLayout Padding="20,40,20,40">
-                            <!-- 空白区域点击控制，呼出设置菜单 -->
                             <VerticalStackLayout.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding BindingContext.ProcessTapCommand, Source={x:Reference RootPage}}" />
                             </VerticalStackLayout.GestureRecognizers>
@@ -31,7 +25,6 @@
                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Paragraphs}" Spacing="15">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate>
-                                        <!-- 【核心绑定】：绑定 FontFamily、FontSize、和多色高亮的 FormattedText -->
                                         <Label FormattedText="{Binding FormattedText}" 
                                                StyleClass="ReadingText"
                                                FontFamily="{Binding BindingContext.ReaderFontFamily, Source={x:Reference RootPage}}"
@@ -46,7 +39,6 @@
                         </VerticalStackLayout>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
-
                 <CollectionView.Footer>
                     <Grid Padding="20" BackgroundColor="Transparent">
                         <Grid.GestureRecognizers>
@@ -66,14 +58,12 @@
                     </Grid>
                 </CollectionView.Footer>
             </CollectionView>
-
             <Grid Grid.Row="1" Margin="20,5,20,15">
                 <Label Text="{Binding ChapterTitle}" FontSize="11" TextColor="{Binding StatusTextColor}" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1"/>
             </Grid>
         </Grid>
 
         <!-- ==================== 图层 1B：全新的左右翻页区 ==================== -->
-        <!-- 注意这里使用了 DataTrigger，当 IsScrollMode 为 False 时，它才显示 -->
         <CarouselView ItemsSource="{Binding PagedStream}" Loop="False" PeekAreaInsets="0" IsVisible="False">
             <CarouselView.Triggers>
                 <DataTrigger TargetType="CarouselView" Binding="{Binding IsScrollMode}" Value="False">
@@ -84,18 +74,14 @@
                 <DataTemplate>
                     <Grid RowDefinitions="Auto, *, Auto" Padding="20,40,20,15">
                         <Grid.GestureRecognizers>
-                            <!-- 翻页模式下点击屏幕中心唤出菜单 -->
                             <TapGestureRecognizer Command="{Binding BindingContext.ProcessTapCommand, Source={x:Reference RootPage}}" />
                         </Grid.GestureRecognizers>
 
-                        <!-- 顶部：章节标题小字 -->
                         <Label Grid.Row="0" Text="{Binding Title}" FontSize="11" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" Margin="0,0,0,15" LineBreakMode="TailTruncation" MaxLines="1"/>
 
-                        <!-- 中间：当前页的正文内容 -->
                         <VerticalStackLayout Grid.Row="1" BindableLayout.ItemsSource="{Binding Paragraphs}" Spacing="15">
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate>
-                                    <!-- 【核心绑定】：绑定 FontFamily、FontSize、和多色高亮的 FormattedText -->
                                     <Label FormattedText="{Binding FormattedText}" 
                                            StyleClass="ReadingText" 
                                            FontFamily="{Binding BindingContext.ReaderFontFamily, Source={x:Reference RootPage}}"
@@ -106,7 +92,6 @@
                             </BindableLayout.ItemTemplate>
                         </VerticalStackLayout>
 
-                        <!-- 底部：书名和翻页进度状态 -->
                         <Grid Grid.Row="2" ColumnDefinitions="Auto, *, Auto" Margin="0,20,0,0">
                             <Label Grid.Column="1" Text="{Binding BindingContext.ChapterTitle, Source={x:Reference RootPage}}" FontSize="11" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1"/>
                             <Label Grid.Column="2" Text="{Binding PageIndicator}" FontSize="11" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" HorizontalOptions="End" VerticalOptions="Center"/>
@@ -115,6 +100,26 @@
                 </DataTemplate>
             </CarouselView.ItemTemplate>
         </CarouselView>
+
+        <!-- ============================================================================== -->
+        <!-- 【终极修复方案】：图层 1C - 上下边缘物理唤醒区 (Edge HotZones)                     -->
+        <!-- 使用极度透明的黑 (#01000000)，MAUI 会认为它是实体从而拦截触摸，但肉眼完全隐形。      -->
+        <!-- 中间的 '*' 区域完全中空，将屏幕心脏地带 100% 留给原生 TextView 供长按划线使用。      -->
+        <!-- ============================================================================== -->
+        <Grid RowDefinitions="80, *, 80">
+            <!-- 顶部 80px 唤醒区 -->
+            <Grid Grid.Row="0" BackgroundColor="#01000000">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ProcessTapCommand}" />
+                </Grid.GestureRecognizers>
+            </Grid>
+            <!-- 底部 80px 唤醒区 -->
+            <Grid Grid.Row="2" BackgroundColor="#01000000">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ProcessTapCommand}" />
+                </Grid.GestureRecognizers>
+            </Grid>
+        </Grid>
 
         <!-- ==================== 图层 2：悬浮设置菜单栏 ==================== -->
         <Grid RowDefinitions="Auto, *, Auto" IsVisible="{Binding IsMenuVisible}" BackgroundColor="Transparent">
@@ -131,11 +136,9 @@
             </Grid>
 
             <Border Grid.Row="2" BackgroundColor="#E61C1C1E" StrokeShape="RoundRectangle 20,20,0,0" StrokeThickness="0">
-                <!-- 放入 ScrollView 防止菜单在小屏手机上被遮挡 -->
                 <ScrollView MaximumHeightRequest="450" VerticalScrollBarVisibility="Never" Padding="20">
                     <VerticalStackLayout Spacing="25">
 
-                        <!-- 1. 亮度调节拉杆 -->
                         <Grid ColumnDefinitions="Auto, *, Auto">
                             <Label Grid.Column="0" Text="🔅" FontSize="16" TextColor="White" VerticalOptions="Center" />
                             <Slider Grid.Column="1" Minimum="0.01" Maximum="1.0" Value="{Binding ScreenBrightness}" MinimumTrackColor="#D1A67B" MaximumTrackColor="#33FFFFFF" ThumbColor="#FFFFFF" Margin="10,0"/>
@@ -143,16 +146,13 @@
                         </Grid>
                         <BoxView HeightRequest="1" Color="#33FFFFFF" />
 
-                        <!-- 2. 字体切换 -->
                         <Grid ColumnDefinitions="*, *, *">
                             <Button Grid.Column="0" Text="系统默认" Command="{Binding ChangeFontCommand}" CommandParameter="" BackgroundColor="#33FFFFFF" TextColor="White" CornerRadius="20" Margin="5,0"/>
-                            <!-- 这里的 CommandParameter 需要和你在 MauiProgram.cs 中注册字体时使用的 Alias (别名) 保持一致 -->
                             <Button Grid.Column="1" Text="楷体" Command="{Binding ChangeFontCommand}" CommandParameter="simkai" BackgroundColor="#33FFFFFF" TextColor="White" CornerRadius="20" Margin="5,0"/>
-                            <Button Grid.Column="2" Text="宋体" Command="{Binding ChangeFontCommand}" CommandParameter="simsun" BackgroundColor="#33FFFFFF" TextColor="White" CornerRadius="20" Margin="5,0"/>
+                            <Button Grid.Column="2" Text="苍耳" Command="{Binding ChangeFontCommand}" CommandParameter="simsun" BackgroundColor="#33FFFFFF" TextColor="White" CornerRadius="20" Margin="5,0"/>
                         </Grid>
                         <BoxView HeightRequest="1" Color="#33FFFFFF" />
 
-                        <!-- 3. 字号设置 -->
                         <Grid ColumnDefinitions="Auto, *, Auto, *, Auto">
                             <Label Grid.Column="0" Text="A-" FontSize="16" TextColor="White" VerticalOptions="Center" />
                             <Button Grid.Column="1" Text="缩小" Command="{Binding DecreaseFontCommand}" BackgroundColor="#33FFFFFF" TextColor="White" HeightRequest="40" CornerRadius="20" Margin="10,0"/>
@@ -162,7 +162,6 @@
                         </Grid>
                         <BoxView HeightRequest="1" Color="#33FFFFFF" />
 
-                        <!-- 4. 主题与目录控制 -->
                         <Grid ColumnDefinitions="*, *, *">
                             <Button Grid.Column="0" Text="日间" Command="{Binding ChangeThemeCommand}" CommandParameter="Day" BackgroundColor="#FFFFFF" TextColor="#333333" CornerRadius="20" Margin="5,0"/>
                             <Button Grid.Column="1" Text="护眼" Command="{Binding ChangeThemeCommand}" CommandParameter="EyeCare" BackgroundColor="#F4ECD8" TextColor="#3E3222" CornerRadius="20" Margin="5,0"/>
@@ -213,32 +212,20 @@
             </Grid>
         </Grid>
 
-        <!-- ==================== 图层 4：深度编辑工作台 (配合原生菜单中的📝想法唤起) ==================== -->
+        <!-- ==================== 图层 4：深度编辑工作台 ==================== -->
         <Grid RowDefinitions="Auto, *, Auto, Auto" IsVisible="{Binding IsNoteOverlayVisible}" BackgroundColor="#FDFDFD">
-
             <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,40,15,15" BackgroundColor="#FFFFFF">
                 <Button Grid.Column="0" Text="取消" Command="{Binding CloseAllMenusCommand}" BackgroundColor="Transparent" TextColor="#666666" />
                 <Label Grid.Column="1" Text="编辑金句与想法" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center" />
                 <Button Grid.Column="2" Text="完成" Command="{Binding SaveNoteWithCommentCommand}" BackgroundColor="Transparent" TextColor="#D1A67B" FontAttributes="Bold" />
             </Grid>
             <BoxView Grid.Row="0" HeightRequest="1" Color="#EEEEEE" VerticalOptions="End" />
-
             <Grid Grid.Row="1" Padding="20">
                 <Label Text="删减保留你需要高亮的句子：" FontSize="12" TextColor="#999999" VerticalOptions="Start" />
-                <Editor Text="{Binding ExtractTargetParagraph}" 
-                        FontSize="16" 
-                        TextColor="#333333" 
-                        Margin="0,25,0,0" 
-                        VerticalOptions="FillAndExpand" />
+                <Editor Text="{Binding ExtractTargetParagraph}" FontSize="16" TextColor="#333333" Margin="0,25,0,0" VerticalOptions="FillAndExpand" />
             </Grid>
-
             <Border Grid.Row="2" BackgroundColor="#FFFFFF" Stroke="#DDDDDD" StrokeThickness="1" StrokeShape="RoundRectangle 8" Padding="15" Margin="20,0,20,30" HeightRequest="120">
-                <Editor Text="{Binding UserNoteInput}" 
-                        Placeholder="记录你的感悟 (必填)..." 
-                        PlaceholderColor="#CCCCCC" 
-                        FontSize="14" 
-                        TextColor="#333333" 
-                        VerticalOptions="FillAndExpand" />
+                <Editor Text="{Binding UserNoteInput}" Placeholder="记录你的感悟 (必填)..." PlaceholderColor="#CCCCCC" FontSize="14" TextColor="#333333" VerticalOptions="FillAndExpand" />
             </Border>
         </Grid>
 
@@ -246,6 +233,5 @@
         <Grid BackgroundColor="#CC000000" IsVisible="{Binding IsLoading}">
             <ActivityIndicator IsRunning="{Binding IsLoading}" Color="White" WidthRequest="50" HeightRequest="50" HorizontalOptions="Center" VerticalOptions="Center" />
         </Grid>
-
     </Grid>
 </ContentPage>
