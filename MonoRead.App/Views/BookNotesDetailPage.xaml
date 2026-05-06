@@ -11,15 +11,21 @@
     <Grid RowDefinitions="Auto, *, Auto">
 
         <!-- ==================== 顶部导航栏 ==================== -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,40,15,15" BackgroundColor="#FFFFFF">
+        <!-- 修改了 ColumnDefinitions，追加了一列给导出按钮 -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto" Padding="15,40,15,15" BackgroundColor="#FFFFFF">
             <Grid Grid.Column="0" Padding="10" BackgroundColor="Transparent">
                 <Grid.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding GoBackCommand}" />
                 </Grid.GestureRecognizers>
                 <Label Text="← 返回" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
             </Grid>
+
             <Label Grid.Column="1" Text="{Binding BookTitle}" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1" />
-            <Button Grid.Column="2" Text="{Binding ManageButtonText}" Command="{Binding ToggleManageModeCommand}" BackgroundColor="Transparent" TextColor="#D1A67B" FontAttributes="Bold" />
+
+            <!-- 【新增导出按钮】 -->
+            <Button Grid.Column="2" Text="📤 导出" Command="{Binding ExportToMarkdownCommand}" BackgroundColor="Transparent" TextColor="#666666" FontAttributes="Bold" Margin="0,0,5,0" />
+
+            <Button Grid.Column="3" Text="{Binding ManageButtonText}" Command="{Binding ToggleManageModeCommand}" BackgroundColor="Transparent" TextColor="#D1A67B" FontAttributes="Bold" />
         </Grid>
         <BoxView Grid.Row="0" HeightRequest="1" Color="#EEEEEE" VerticalOptions="End" />
 

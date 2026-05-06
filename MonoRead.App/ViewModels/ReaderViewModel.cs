@@ -63,11 +63,15 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private string _userNoteInput = string.Empty;
 
         private DateTime _lastToggleTime = DateTime.MinValue;
-
-        public ReaderViewModel(IBookRepository bookRepository, IBookNoteRepository noteRepository)
+        private readonly IReadingRecordRepository _recordRepository;
+        private DateTime _sessionStartTime; // 记录本次打开阅读器的时间
+        public ReaderViewModel(IBookRepository bookRepository, IBookNoteRepository noteRepository, IReadingRecordRepository recordRepository)
         {
             _bookRepository = bookRepository;
             _noteRepository = noteRepository;
+            _recordRepository = recordRepository;
+            // 刚进入页面，记录开始时间
+            _sessionStartTime = DateTime.UtcNow;
 
             WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) => HandleMenuToggleRequest());
 
@@ -425,7 +429,20 @@ namespace MonoRead.App.ViewModels
         }
 
         // ==================== 界面控制 ====================
-        [RelayCommand] private async Task GoBackAsync() => await Shell.Current.GoToAsync("..");
+        [RelayCommand]
+        private async Task GoBackAsync()
+        {
+            // 结算本次阅读时长
+            var duration = (int)(DateTime.UtcNow - _sessionStartTime).TotalSeconds;
+
+            // 如果阅读超过 10 秒，才记入数据库（防误触刷时长）
+            if (duration > 10)
+            {
+                await _recordRepository.AddDurationAsync(DateTime.UtcNow, duration);
+            }
+
+            await Shell.Current.GoToAsync("..");
+        }
         [RelayCommand] private void ToggleToc() { IsTocVisible = !IsTocVisible; if (IsTocVisible) IsMenuVisible = false; }
         [RelayCommand] private async Task SelectChapterAsync(BookChapter chapter) { if (chapter == null) return; IsTocVisible = false; IsMenuVisible = false; await LoadChapterIntoStreamAsync(chapter, clearStream: true); }
         [RelayCommand] private void IncreaseFont() { if (ReaderFontSize < 36) { ReaderFontSize += 2; Preferences.Default.Set("ReaderFontSize", ReaderFontSize); } }

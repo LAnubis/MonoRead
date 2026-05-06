@@ -5,6 +5,7 @@ using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure.Logging;
 using System.Collections.ObjectModel;
+using System.Text; // 【新增】引入 StringBuilder 用于组装 Markdown
 
 namespace MonoRead.App.ViewModels
 {
@@ -168,6 +169,47 @@ namespace MonoRead.App.ViewModels
                 await Application.Current.MainPage!.DisplayAlert("错误", $"删除失败: {ex.Message}", "确定");
             }
             finally { IsBusy = false; }
+        }
+
+        // =========================================================
+        // 【新增功能】：一键导出为 Markdown
+        // =========================================================
+        [RelayCommand]
+        private async Task ExportToMarkdownAsync()
+        {
+            // 将嵌套的分组数据拍扁提取出来
+            var allNotes = GroupedNotes.SelectMany(g => g).Select(item => item.Note).ToList();
+
+            if (!allNotes.Any())
+            {
+                await Application.Current.MainPage!.DisplayAlert("提示", "当前没有可以导出的笔记", "好的");
+                return;
+            }
+
+            var sb = new StringBuilder();
+
+            // Markdown 标题
+            sb.AppendLine($"# 《{BookTitle}》读书笔记");
+            sb.AppendLine($"**导出时间**：{DateTime.Now:yyyy-MM-dd HH:mm}\n");
+            sb.AppendLine("---");
+
+            foreach (var note in allNotes)
+            {
+                // 原文引用块
+                sb.AppendLine($"> {note.SelectedText}");
+
+                // 用户想法（如果有的话）
+                if (!string.IsNullOrWhiteSpace(note.UserComment))
+                {
+                    sb.AppendLine($"\n**💡 想法**：{note.UserComment}");
+                }
+                sb.AppendLine("\n---");
+            }
+
+            // 调用 MAUI 原生剪贴板 API
+            await Clipboard.Default.SetTextAsync(sb.ToString());
+
+            await Application.Current.MainPage!.DisplayAlert("导出成功", "Markdown 格式的笔记已复制到剪贴板，快去粘贴到你的笔记软件中吧！", "太棒了");
         }
 
         [RelayCommand]

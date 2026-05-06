@@ -34,6 +34,7 @@ namespace MonoRead.Core.Interfaces
 
         // 彻底物理销毁书籍（复合事务：处理关联笔记，并返回沙盒物理路径供上层清理）
         Task<string?> PermanentlyDeleteBookAsync(Guid bookId, bool destroyNotes);
+
         // 【核心修复】：补充丢失的解析入库方法
         Task SaveBookWithChaptersAsync(Book book, IEnumerable<BookChapter> chapters);
     }

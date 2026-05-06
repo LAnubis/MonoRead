@@ -96,53 +96,58 @@ namespace MonoRead.Infrastructure.services
             }
         }
 
-        public async Task PermanentlyDeleteBookAsync(Guid bookId, bool destroyNotes)
+        // 【核心修复】：加上了 <string?> 返回类型
+        public async Task<string?> PermanentlyDeleteBookAsync(Guid bookId, bool destroyNotes)
         {
-            // 1. 找到这本要被销毁的书
-            var book = await _context.Books.FindAsync(bookId);
-            if (book == null) return;
-
-            // 2. 【核心修复 A】：找出所有的笔记，妥善安置它们
-            var notes = await _context.BookNotes.Where(n => n.BookId == bookId).ToListAsync();
-            if (notes.Any())
-            {
-                if (destroyNotes)
-                {
-                    // 用户选择玉石俱焚：直接连笔记一起物理删除
-                    _context.BookNotes.RemoveRange(notes);
-                }
-                else
-                {
-                    // 用户选择保留笔记：必须同时解除 BookId 和 ChapterId 的外键约束！
-                    foreach (var note in notes)
-                    {
-                        note.BookId = null;
-                        note.ChapterId = null; // 👈 极其关键：因为马上连章节也要被删了！
-                        note.IsOrphan = true;
-                    }
-                    _context.BookNotes.UpdateRange(notes);
-                }
-            }
-
-            // 3. 【核心修复 B】：主动查出并剿灭所有关联的章节，绝不依赖 EF Core 脆弱的自动级联
-            var chapters = await _context.BookChapters.Where(c => c.BookId == bookId).ToListAsync();
-            if (chapters.Any())
-            {
-                _context.BookChapters.RemoveRange(chapters);
-            }
-
-            // 4. 清理完毕，物理删除书籍本体
-            _context.Books.Remove(book);
-
-            // 5. 提交事务（如果有任何步骤失败，会自动回滚）
             try
             {
+                // 1. 找到这本要被销毁的书
+                var book = await _context.Books.FindAsync(bookId);
+                if (book == null) return "未能找到指定的书籍记录"; // 返回错误文本
+
+                // 2. 找出所有的笔记，妥善安置它们
+                var notes = await _context.BookNotes.Where(n => n.BookId == bookId).ToListAsync();
+                if (notes.Any())
+                {
+                    if (destroyNotes)
+                    {
+                        // 用户选择玉石俱焚：直接连笔记一起物理删除
+                        _context.BookNotes.RemoveRange(notes);
+                    }
+                    else
+                    {
+                        // 用户选择保留笔记：必须同时解除 BookId 和 ChapterId 的外键约束！
+                        foreach (var note in notes)
+                        {
+                            note.BookId = null;
+                            note.ChapterId = null; // 👈 极其关键：因为马上连章节也要被删了！
+                            note.IsOrphan = true;
+                        }
+                        _context.BookNotes.UpdateRange(notes);
+                    }
+                }
+
+                // 3. 主动查出并剿灭所有关联的章节，绝不依赖 EF Core 脆弱的自动级联
+                var chapters = await _context.BookChapters.Where(c => c.BookId == bookId).ToListAsync();
+                if (chapters.Any())
+                {
+                    _context.BookChapters.RemoveRange(chapters);
+                }
+
+                // 4. 清理完毕，物理删除书籍本体
+                _context.Books.Remove(book);
+
+                // 5. 提交事务
                 await _context.SaveChangesAsync();
+
+                // 【核心修复】：删除成功，返回 null 表示没有错误
+                return null;
             }
             catch (Exception ex)
             {
                 LocalLogger.LogError($"永久删除书籍时发生数据库异常: {ex.Message} \n内部异常: {ex.InnerException?.Message}");
-                throw; // 抛出异常让上层 ViewModel 处理
+                // 【核心修复】：发生异常时，不向上抛出，而是作为字符串返回给 ViewModel
+                return $"数据库级联删除失败: {ex.Message}";
             }
         }
     }

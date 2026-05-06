@@ -1,14 +1,83 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure.Logging;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Text;
 
 namespace MonoRead.App.ViewModels
 {
+    // 绿点模型
+    public partial class HeatmapBox : ObservableObject
+    {
+        public DateTime Date { get; set; }
+        public int DurationSeconds { get; set; }
+        public string ColorHex { get; set; } = "#EBEDF0"; // 默认浅灰色（未阅读）
+        public string Tooltip => $"{Date:MM-dd}: 阅读 {DurationSeconds / 60} 分钟";
+    }
     public partial class SettingsViewModel : ObservableObject
     {
+        private readonly IReadingRecordRepository _recordRepository;
+
+        [ObservableProperty] private int _totalReadMinutes = 0;
+        [ObservableProperty] private int _continuousReadDays = 0;
+
+        // 绑定的热力图数据源
+        [ObservableProperty] private ObservableCollection<HeatmapBox> _heatBoxes = new();
+        public SettingsViewModel(IReadingRecordRepository recordRepository)
+        {
+            _recordRepository = recordRepository;
+            LoadStatisticsAsync();
+        }
+
+        private async void LoadStatisticsAsync()
+        {
+            // 获取过去 90 天的数据（适合手机横向显示）
+            var records = await _recordRepository.GetRecentRecordsAsync(90);
+
+            int totalSecs = 0;
+            int streak = 0;
+            DateTime today = DateTime.UtcNow.Date;
+
+            // 计算总时长和连续阅读天数
+            foreach (var r in records.OrderByDescending(x => x.RecordDate))
+            {
+                totalSecs += r.DurationSeconds;
+                // 简单的连续打卡计算逻辑
+                if (r.RecordDate == today.AddDays(-streak) && r.DurationSeconds > 0)
+                    streak++;
+            }
+
+            TotalReadMinutes = totalSecs / 60;
+            ContinuousReadDays = streak;
+
+            // 绘制热力图矩阵 (补齐 90 天的格子，没有记录的填灰色)
+            var boxes = new List<HeatmapBox>();
+            for (int i = 89; i >= 0; i--)
+            {
+                var targetDate = today.AddDays(-i);
+                var record = records.FirstOrDefault(r => r.RecordDate == targetDate);
+                int secs = record?.DurationSeconds ?? 0;
+                int mins = secs / 60;
+
+                string color = "#EBEDF0"; // 0分钟: 灰色
+                if (mins > 0 && mins <= 15) color = "#9BE9A8"; // 浅绿
+                else if (mins > 15 && mins <= 45) color = "#40C463"; // 中绿
+                else if (mins > 45 && mins <= 90) color = "#30A14E"; // 深绿
+                else if (mins > 90) color = "#216E39"; // 墨绿 (大佬级别)
+
+                boxes.Add(new HeatmapBox { Date = targetDate, DurationSeconds = secs, ColorHex = color });
+            }
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                HeatBoxes.Clear();
+                foreach (var box in boxes) HeatBoxes.Add(box);
+            });
+        }
+
         [RelayCommand]
         private async Task GoToTrashAsync()
         {

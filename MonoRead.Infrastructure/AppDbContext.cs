@@ -18,7 +18,7 @@ namespace MonoRead.Infrastructure
 
         // 【核心修复 1】：将旧的 HighlightNotes 替换为全局统一的 BookNotes
         public DbSet<BookNote> BookNotes => Set<BookNote>();
-
+        public DbSet<ReadingRecord> ReadingRecords => Set<ReadingRecord>();
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
