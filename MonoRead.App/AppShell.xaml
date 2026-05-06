@@ -3,28 +3,40 @@
     x:Class="MonoRead.App.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-   xmlns:views="clr-namespace:MonoRead.App.Views"
-    Shell.FlyoutBehavior="Disabled">
+    xmlns:views="clr-namespace:MonoRead.App.Views"
+    Shell.FlyoutBehavior="Disabled"
+    Shell.TabBarBackgroundColor="#FFFFFF"
+    Shell.TabBarForegroundColor="#333333"
+    Shell.TabBarTitleColor="#D1A67B"          
+    Shell.TabBarUnselectedColor="#FF808080">
 
-    <!--<TabBar>
-        <Tab Title="书架">
-            <ShellContent ContentTemplate="{DataTemplate views:LibraryPage}" />
-        </Tab>
-    </TabBar>-->
+    <!-- ====================================================================== -->
+    <!-- 【核心 UI 调优】：全局控制底部导航栏的配色方案，解决默认样式的高级感缺失 -->
+    <!-- ====================================================================== -->
+
+    <!-- 【沉浸感升级】：隐藏掉原生顶部那个难看的 Title Bar -->
+    <Shell.ItemTemplate>
+        <DataTemplate>
+            <ContentView />
+        </DataTemplate>
+    </Shell.ItemTemplate>
 
     <TabBar>
-        <Tab Title="最近" Icon="tab_recent.svg">
+        <Tab Title="最近" Icon="tab_recent.png">
             <ShellContent ContentTemplate="{DataTemplate views:RecentPage}" Route="RecentPage" />
         </Tab>
 
-        <Tab Title="书架" Icon="tab_library.svg">
+        <Tab Title="书架" Icon="tab_library.png">
             <ShellContent ContentTemplate="{DataTemplate views:LibraryPage}" Route="LibraryPage" />
         </Tab>
-        <Tab Title="笔记" Icon="tab_notes.svg">
+
+        <Tab Title="笔记" Icon="tab_notes.png">
             <ShellContent ContentTemplate="{DataTemplate views:NotesPage}" Route="NotesPage"/>
         </Tab>
-        <Tab Title="设置" Icon="tab_settings.svg">
+
+        <Tab Title="设置" Icon="tab_settings.png">
             <ShellContent ContentTemplate="{DataTemplate views:SettingsPage}" Route="SettingsPage" />
         </Tab>
     </TabBar>
+
 </Shell>
