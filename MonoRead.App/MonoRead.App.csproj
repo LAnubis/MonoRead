@@ -11,7 +11,8 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
-
+		<IsPackable>false</IsPackable>
+		
 		<!-- Display name -->
 		<ApplicationTitle>MonoRead</ApplicationTitle>
 		<!-- App Identifier -->
@@ -31,6 +32,7 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+		<AndroidSigningKeyStore>monoread.keystore</AndroidSigningKeyStore>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' == 'net10.0-android'">
@@ -41,6 +43,64 @@
 		<!-- 3. 强制指定打包包含 ARM64 架构（目前市面上 99% 的真机都是 arm64-v8a） -->
 		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
 		<InterproceduralOptimization>true</InterproceduralOptimization>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-android|AnyCPU'">
+	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationTitle>FableReader</ApplicationTitle>
+	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <AndroidKeyStore>True</AndroidKeyStore>
+	  <AndroidSigningStorePass>381716</AndroidSigningStorePass>
+	  <AndroidSigningKeyAlias>monoread_alias</AndroidSigningKeyAlias>
+	  <AndroidSigningKeyPass>381716</AndroidSigningKeyPass>
+	  <AndroidApkSignerAdditionalArguments>-f net10.0-android -c Release /p:RunAOTCompilation=true /p:PublishTrimmed=true</AndroidApkSignerAdditionalArguments>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-ios|AnyCPU'">
+	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationTitle>FableReader</ApplicationTitle>
+	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-maccatalyst|AnyCPU'">
+	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationTitle>FableReader</ApplicationTitle>
+	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-windows10.0.19041.0|AnyCPU'">
+	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationTitle>FableReader</ApplicationTitle>
+	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
+	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationTitle>FableReader</ApplicationTitle>
+	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <AndroidKeyStore>True</AndroidKeyStore>
+	  <AndroidSigningStorePass>381716</AndroidSigningStorePass>
+	  <AndroidSigningKeyAlias>monoread_alias</AndroidSigningKeyAlias>
+	  <AndroidSigningKeyPass>381716</AndroidSigningKeyPass>
+	  <AndroidApkSignerAdditionalArguments>-f net10.0-android -c Release /p:RunAOTCompilation=true /p:PublishTrimmed=true</AndroidApkSignerAdditionalArguments>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-ios|AnyCPU'">
+	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationTitle>FableReader</ApplicationTitle>
+	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-maccatalyst|AnyCPU'">
+	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationTitle>FableReader</ApplicationTitle>
+	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-windows10.0.19041.0|AnyCPU'">
+	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationTitle>FableReader</ApplicationTitle>
+	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<ItemGroup>

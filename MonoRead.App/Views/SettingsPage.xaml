@@ -138,13 +138,6 @@
 
                 </VerticalStackLayout>
 
-                <!-- 底部版本号声明 -->
-                <Label Text="MonoRead V1.6" 
-                       FontSize="12" 
-                       TextColor="#B2B2B2" 
-                       HorizontalOptions="Center" 
-                       Margin="0,40,0,40"/>
-
             </VerticalStackLayout>
         </ScrollView>
     </Grid>

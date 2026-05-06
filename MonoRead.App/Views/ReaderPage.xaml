@@ -14,7 +14,6 @@
             <CollectionView Grid.Row="0" ItemsSource="{Binding ReadingStream}" RemainingItemsThreshold="0" RemainingItemsThresholdReachedCommand="{Binding LoadNextChapterSeamlesslyCommand}" SelectionMode="None">
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <!-- 段落留白处依然保留唤醒能力 -->
                         <VerticalStackLayout Padding="20,40,20,40">
                             <VerticalStackLayout.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding BindingContext.ProcessTapCommand, Source={x:Reference RootPage}}" />
@@ -77,9 +76,17 @@
                             <TapGestureRecognizer Command="{Binding BindingContext.ProcessTapCommand, Source={x:Reference RootPage}}" />
                         </Grid.GestureRecognizers>
 
+                        <!-- 顶部：章节标题小字 -->
                         <Label Grid.Row="0" Text="{Binding Title}" FontSize="11" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" Margin="0,0,0,15" LineBreakMode="TailTruncation" MaxLines="1"/>
 
+                        <!-- ========================================================= -->
+                        <!-- 区域 1：普通文本阅读区 (过渡页时隐藏) -->
                         <VerticalStackLayout Grid.Row="1" BindableLayout.ItemsSource="{Binding Paragraphs}" Spacing="15">
+                            <VerticalStackLayout.Triggers>
+                                <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding IsTransitionPage}" Value="True">
+                                    <Setter Property="IsVisible" Value="False" />
+                                </DataTrigger>
+                            </VerticalStackLayout.Triggers>
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate>
                                     <Label FormattedText="{Binding FormattedText}" 
@@ -92,6 +99,50 @@
                             </BindableLayout.ItemTemplate>
                         </VerticalStackLayout>
 
+                        <!-- ========================================================= -->
+                        <!-- 区域 2：章节过渡页 (普通页时隐藏) -->
+                        <VerticalStackLayout Grid.Row="1" VerticalOptions="Center" HorizontalOptions="Center" Spacing="30" IsVisible="False">
+                            <VerticalStackLayout.Triggers>
+                                <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding IsTransitionPage}" Value="True">
+                                    <Setter Property="IsVisible" Value="True" />
+                                </DataTrigger>
+                            </VerticalStackLayout.Triggers>
+
+                            <Label Text="— 本章完 —" FontSize="18" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" HorizontalOptions="Center" />
+
+                            <!-- 跳转下一章按钮（带圆角和描边，极具高级感） -->
+                            <Button Text="{Binding NextChapterTitle, StringFormat='下一章：{0}'}"
+                                    Command="{Binding BindingContext.NextChapterCommand, Source={x:Reference RootPage}}"
+                                    BackgroundColor="Transparent"
+                                    BorderColor="#D1A67B"
+                                    BorderWidth="1"
+                                    TextColor="#D1A67B"
+                                    CornerRadius="25"
+                                    HeightRequest="50"
+                                    Padding="30,0"
+                                    FontSize="16"
+                                    FontAttributes="Bold"
+                                    HorizontalOptions="Center">
+                                <Button.Triggers>
+                                    <!-- 如果没有下一章了，就隐藏这个按钮 -->
+                                    <DataTrigger TargetType="Button" Binding="{Binding BindingContext.CanGoNext, Source={x:Reference RootPage}}" Value="False">
+                                        <Setter Property="IsVisible" Value="False" />
+                                    </DataTrigger>
+                                </Button.Triggers>
+                            </Button>
+
+                            <!-- 全书完结提示 -->
+                            <Label Text="已经是全书最后一章" FontSize="14" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" HorizontalOptions="Center">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding BindingContext.CanGoNext, Source={x:Reference RootPage}}" Value="True">
+                                        <Setter Property="IsVisible" Value="False" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </VerticalStackLayout>
+                        <!-- ========================================================= -->
+
+                        <!-- 底部：书名和翻页进度状态 -->
                         <Grid Grid.Row="2" ColumnDefinitions="Auto, *, Auto" Margin="0,20,0,0">
                             <Label Grid.Column="1" Text="{Binding BindingContext.ChapterTitle, Source={x:Reference RootPage}}" FontSize="11" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1"/>
                             <Label Grid.Column="2" Text="{Binding PageIndicator}" FontSize="11" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" HorizontalOptions="End" VerticalOptions="Center"/>
@@ -101,19 +152,13 @@
             </CarouselView.ItemTemplate>
         </CarouselView>
 
-        <!-- ============================================================================== -->
-        <!-- 【终极修复方案】：图层 1C - 上下边缘物理唤醒区 (Edge HotZones)                     -->
-        <!-- 使用极度透明的黑 (#01000000)，MAUI 会认为它是实体从而拦截触摸，但肉眼完全隐形。      -->
-        <!-- 中间的 '*' 区域完全中空，将屏幕心脏地带 100% 留给原生 TextView 供长按划线使用。      -->
-        <!-- ============================================================================== -->
+        <!-- 图层 1C - 上下边缘物理唤醒区 (Edge HotZones) -->
         <Grid RowDefinitions="80, *, 80">
-            <!-- 顶部 80px 唤醒区 -->
             <Grid Grid.Row="0" BackgroundColor="#01000000">
                 <Grid.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding ProcessTapCommand}" />
                 </Grid.GestureRecognizers>
             </Grid>
-            <!-- 底部 80px 唤醒区 -->
             <Grid Grid.Row="2" BackgroundColor="#01000000">
                 <Grid.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding ProcessTapCommand}" />
@@ -148,8 +193,8 @@
 
                         <Grid ColumnDefinitions="*, *, *">
                             <Button Grid.Column="0" Text="系统默认" Command="{Binding ChangeFontCommand}" CommandParameter="" BackgroundColor="#33FFFFFF" TextColor="White" CornerRadius="20" Margin="5,0"/>
-                            <Button Grid.Column="1" Text="楷体" Command="{Binding ChangeFontCommand}" CommandParameter="simkai" BackgroundColor="#33FFFFFF" TextColor="White" CornerRadius="20" Margin="5,0"/>
-                            <Button Grid.Column="2" Text="苍耳" Command="{Binding ChangeFontCommand}" CommandParameter="simsun" BackgroundColor="#33FFFFFF" TextColor="White" CornerRadius="20" Margin="5,0"/>
+                            <Button Grid.Column="1" Text="楷体" Command="{Binding ChangeFontCommand}" CommandParameter="Kaiti" BackgroundColor="#33FFFFFF" TextColor="White" CornerRadius="20" Margin="5,0"/>
+                            <Button Grid.Column="2" Text="苍耳" Command="{Binding ChangeFontCommand}" CommandParameter="Canger" BackgroundColor="#33FFFFFF" TextColor="White" CornerRadius="20" Margin="5,0"/>
                         </Grid>
                         <BoxView HeightRequest="1" Color="#33FFFFFF" />
 

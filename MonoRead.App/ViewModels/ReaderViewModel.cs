@@ -26,12 +26,20 @@ namespace MonoRead.App.ViewModels
         public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
     }
 
+    // =========================================================
+    // 【修改】：加入章节过渡页标识
+    // =========================================================
     public class ReaderPageUiModel
     {
         public Guid ChapterId { get; set; }
         public string Title { get; set; } = string.Empty;
         public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
         public string PageIndicator { get; set; } = string.Empty;
+
+        // 标识是否为“本章完”的过渡页
+        public bool IsTransitionPage { get; set; } = false;
+        // 预告下一章的标题
+        public string NextChapterTitle { get; set; } = string.Empty;
     }
 
     [QueryProperty(nameof(BookIdString), "BookId")]
@@ -66,7 +74,6 @@ namespace MonoRead.App.ViewModels
 
         [ObservableProperty] private int _readerFontSize = Preferences.Default.Get("ReaderFontSize", 18);
         [ObservableProperty] private string _readerFontFamily = Preferences.Default.Get("ReaderFontFamily", string.Empty);
-
         [ObservableProperty] private double _screenBrightness = Preferences.Default.Get("ReaderBrightness", 0.5);
 
         [ObservableProperty] private Color _pageBackgroundColor = Color.FromArgb(Preferences.Default.Get("ThemeBg", "#F4ECD8"));
@@ -147,15 +154,11 @@ namespace MonoRead.App.ViewModels
             });
         }
 
-        // ==============================================================================
-        // 【核心修复 Bug 1】：强制重构富文本引擎，让字体立刻生效
-        // ==============================================================================
         [RelayCommand]
         private async Task ChangeFontAsync(string fontName)
         {
             ReaderFontFamily = fontName;
             Preferences.Default.Set("ReaderFontFamily", fontName ?? string.Empty);
-            // 呼叫刷新管线，重建底层的 FormattedString
             await RefreshHighlightingAsync();
         }
 
@@ -250,8 +253,6 @@ namespace MonoRead.App.ViewModels
         private FormattedString BuildFormattedParagraph(string paragraphText, List<BookNote> chapterNotes)
         {
             var formattedString = new FormattedString();
-
-            // 【核心修复 Bug 1】：为每一个富文本切片注入当前字体
             string fontToUse = string.IsNullOrWhiteSpace(ReaderFontFamily) ? null : ReaderFontFamily;
 
             var matchedNotes = chapterNotes.Where(n => !string.IsNullOrWhiteSpace(n.SelectedText) && paragraphText.Contains(n.SelectedText)).ToList();
@@ -365,6 +366,19 @@ namespace MonoRead.App.ViewModels
                             domainPages[i].PageIndicator = $"{i + 1} / {totalPages}";
                             PagedStream.Add(domainPages[i]);
                         }
+
+                        // =================================================================
+                        // 【核心修复】：追加“本章完”过渡页
+                        // =================================================================
+                        var nextChap = CurrentBook.Chapters.Where(c => c.SortOrder > targetChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
+                        PagedStream.Add(new ReaderPageUiModel
+                        {
+                            ChapterId = targetChapter.Id,
+                            Title = targetChapter.Title,
+                            IsTransitionPage = true,
+                            NextChapterTitle = nextChap?.Title ?? string.Empty,
+                            PageIndicator = "本章完"
+                        });
                     }
 
                     _lastLoadedSortOrder = targetChapter.SortOrder;
