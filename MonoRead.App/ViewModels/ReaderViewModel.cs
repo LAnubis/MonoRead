@@ -5,14 +5,6 @@ using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure.Logging;
 using System.Collections.ObjectModel;
-using Microsoft.Maui.Controls;
-using Microsoft.Maui.Graphics;
-using System.Linq;
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using Microsoft.Maui.ApplicationModel.DataTransfer;
 
 namespace MonoRead.App.ViewModels
 {
@@ -169,11 +161,23 @@ namespace MonoRead.App.ViewModels
                     endCharIndex = doc.RootElement.GetProperty("position").GetInt64();
                 }
 
+                // ==============================================================================
+                // 【核心修复】：剥离旧的绝对路径，动态拼接当前设备的真实沙盒路径！
+                // ==============================================================================
+                string fileName = Path.GetFileName(CurrentBook.FilePath);
+                string actualDevicePath = Path.Combine(Microsoft.Maui.Storage.FileSystem.AppDataDirectory, fileName);
+
+                if (!File.Exists(actualDevicePath))
+                {
+                    // 防御性编程：如果云端恢复只恢复了数据库没恢复源文件，打断无限加载连击
+                    return "【文件缺失】未能找到该书籍的本地源文件。请确认云端备份是否完整包含了小说文件。";
+                }
+
                 int lengthToRead = endCharIndex == long.MaxValue ? 20000 : (int)(endCharIndex - startCharIndex);
                 if (lengthToRead <= 0) return "（本章暂无正文内容）";
                 if (lengthToRead > 20000) lengthToRead = 20000;
 
-                using var reader = new StreamReader(CurrentBook.FilePath);
+                using var reader = new StreamReader(actualDevicePath);
                 if (startCharIndex > 0)
                 {
                     char[] throwawayBuffer = new char[8192];
