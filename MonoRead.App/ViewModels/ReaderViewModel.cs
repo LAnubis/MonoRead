@@ -27,10 +27,6 @@ namespace MonoRead.App.ViewModels
         public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
     }
 
-    // =========================================================
-    // 【架构升级】：专供 UI 绑定的前端视图模型 (View Model)
-    //  与你底层的 ReaderPageNode (Domain Model) 完美解耦！
-    // =========================================================
     public class ReaderPageUiModel
     {
         public Guid ChapterId { get; set; }
@@ -47,6 +43,12 @@ namespace MonoRead.App.ViewModels
         private readonly IReadingRecordRepository _recordRepository;
         private DateTime _sessionStartTime;
 
+        // =========================================================
+        // 【防重影核心】：解决 Transient ViewModel 的幽灵多开问题
+        // =========================================================
+        private static Guid _activeInstanceId = Guid.Empty;
+        private readonly Guid _myInstanceId = Guid.NewGuid();
+
         [ObservableProperty] private bool _isLoading;
         [ObservableProperty] private bool _isLoadingNext;
         [ObservableProperty] private string _bookIdString = string.Empty;
@@ -54,14 +56,8 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private BookChapter? _currentChapter;
         [ObservableProperty] private string _chapterTitle = "加载中...";
 
-        // =========================================================
-        // 双数据流引擎：瀑布流与翻页流
-        // =========================================================
         [ObservableProperty] private ObservableCollection<ReaderChapterNode> _readingStream = new();
-
-        // 绑定给前端的是我们新增的 UiModel
         [ObservableProperty] private ObservableCollection<ReaderPageUiModel> _pagedStream = new();
-
         [ObservableProperty] private bool _isScrollMode;
 
         private int _lastLoadedSortOrder = -1;
@@ -91,13 +87,27 @@ namespace MonoRead.App.ViewModels
 
             _sessionStartTime = DateTime.UtcNow;
 
+            // 【拦截器激活】：每次进入阅读器，最新实例强行霸占活跃权
+            _activeInstanceId = _myInstanceId;
+
             IsScrollMode = Preferences.Default.Get("IsScrollMode", false);
 
-            WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) => HandleMenuToggleRequest());
-            WeakReferenceMessenger.Default.Register<TextSelectionStartedMessage>(this, (r, m) => MainThread.BeginInvokeOnMainThread(() => IsMenuVisible = false));
+            WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) =>
+            {
+                if (_activeInstanceId != _myInstanceId) return; // 👻 幽灵退散
+                HandleMenuToggleRequest();
+            });
+
+            WeakReferenceMessenger.Default.Register<TextSelectionStartedMessage>(this, (r, m) =>
+            {
+                if (_activeInstanceId != _myInstanceId) return; // 👻 幽灵退散
+                MainThread.BeginInvokeOnMainThread(() => IsMenuVisible = false);
+            });
 
             WeakReferenceMessenger.Default.Register<GranularTextSelectedMessage>(this, async (r, m) =>
             {
+                if (_activeInstanceId != _myInstanceId) return; // 👻 幽灵退散！绝对禁止旧实例操作数据库！
+
                 ExtractTargetParagraph = m.SelectedText;
 
                 if (m.ActionCommand == "COPY") { await Clipboard.Default.SetTextAsync(m.SelectedText); }
@@ -267,7 +277,6 @@ namespace MonoRead.App.ViewModels
                 {
                     if (IsScrollMode)
                     {
-                        // ==================== 瀑布流模式 ====================
                         if (clearStream) ReadingStream.Clear();
 
                         var paragraphsUi = new List<ParagraphUiModel>();
@@ -287,12 +296,9 @@ namespace MonoRead.App.ViewModels
                     }
                     else
                     {
-                        // ==================== 翻页流模式 ====================
                         if (clearStream) PagedStream.Clear();
 
-                        int charsPerPage = 550; // 假设每页容纳 550 个字
-
-                        // 第 1 步：先按照你定义的标准领域模型 (ReaderPageNode) 进行切页，保证底层纯洁性
+                        int charsPerPage = 550;
                         var domainPages = new List<ReaderPageNode>();
                         int currentPageCharCount = 0;
                         string currentPageContent = "";
@@ -318,7 +324,6 @@ namespace MonoRead.App.ViewModels
                             }
                         }
 
-                        // 收尾最后一页
                         if (!string.IsNullOrWhiteSpace(currentPageContent))
                         {
                             domainPages.Add(new ReaderPageNode
@@ -330,11 +335,9 @@ namespace MonoRead.App.ViewModels
                             });
                         }
 
-                        // 回填总页数
                         int totalPages = domainPages.Count;
                         foreach (var dp in domainPages) dp.TotalPagesInChapter = totalPages;
 
-                        // 第 2 步：将标准领域模型转化为支持多色高亮的 UI 模型 (ReaderPageUiModel)
                         foreach (var dp in domainPages)
                         {
                             var uiPage = new ReaderPageUiModel
