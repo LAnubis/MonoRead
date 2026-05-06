@@ -11,8 +11,6 @@ namespace MonoRead.App.ViewModels
     // ==================== 跨域消息实体定义 ====================
     public record MenuToggleRequestedMessage();
     public record TextSelectionStartedMessage();
-
-    // 【新增】：接收底层原生菜单传来的精细选中内容和操作指令
     public record GranularTextSelectedMessage(string SelectedText, string ActionCommand);
 
     public partial class ParagraphUiModel : ObservableObject
@@ -29,11 +27,25 @@ namespace MonoRead.App.ViewModels
         public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
     }
 
+    // =========================================================
+    // 【架构升级】：专供 UI 绑定的前端视图模型 (View Model)
+    //  与你底层的 ReaderPageNode (Domain Model) 完美解耦！
+    // =========================================================
+    public class ReaderPageUiModel
+    {
+        public Guid ChapterId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
+        public string PageIndicator { get; set; } = string.Empty; // 底部显示的 1/5 进度
+    }
+
     [QueryProperty(nameof(BookIdString), "BookId")]
     public partial class ReaderViewModel : ObservableObject
     {
         private readonly IBookRepository _bookRepository;
         private readonly IBookNoteRepository _noteRepository;
+        private readonly IReadingRecordRepository _recordRepository;
+        private DateTime _sessionStartTime;
 
         [ObservableProperty] private bool _isLoading;
         [ObservableProperty] private bool _isLoadingNext;
@@ -42,7 +54,16 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private BookChapter? _currentChapter;
         [ObservableProperty] private string _chapterTitle = "加载中...";
 
+        // =========================================================
+        // 双数据流引擎：瀑布流与翻页流
+        // =========================================================
         [ObservableProperty] private ObservableCollection<ReaderChapterNode> _readingStream = new();
+
+        // 绑定给前端的是我们新增的 UiModel
+        [ObservableProperty] private ObservableCollection<ReaderPageUiModel> _pagedStream = new();
+
+        [ObservableProperty] private bool _isScrollMode;
+
         private int _lastLoadedSortOrder = -1;
 
         [ObservableProperty] private bool _canGoPrevious;
@@ -56,40 +77,32 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private Color _textPrimaryColor = Color.FromArgb(Preferences.Default.Get("ThemeText", "#3E3222"));
         [ObservableProperty] private Color _statusTextColor = Color.FromArgb(Preferences.Default.Get("ThemeStatus", "#888888"));
 
-        // ==================== 极简操作台状态机 ====================
-        // 注：IsFloatingMenuVisible 已废弃，由 Android 原生菜单接管
-        [ObservableProperty] private bool _isNoteOverlayVisible = false;  // 深度写想法工作台
+        [ObservableProperty] private bool _isNoteOverlayVisible = false;
         [ObservableProperty] private string _extractTargetParagraph = string.Empty;
         [ObservableProperty] private string _userNoteInput = string.Empty;
 
         private DateTime _lastToggleTime = DateTime.MinValue;
-        private readonly IReadingRecordRepository _recordRepository;
-        private DateTime _sessionStartTime; // 记录本次打开阅读器的时间
+
         public ReaderViewModel(IBookRepository bookRepository, IBookNoteRepository noteRepository, IReadingRecordRepository recordRepository)
         {
             _bookRepository = bookRepository;
             _noteRepository = noteRepository;
             _recordRepository = recordRepository;
-            // 刚进入页面，记录开始时间
+
             _sessionStartTime = DateTime.UtcNow;
 
-            WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) => HandleMenuToggleRequest());
+            IsScrollMode = Preferences.Default.Get("IsScrollMode", false);
 
-            // 选词开始时，隐藏我们的设置菜单，防止遮挡
+            WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) => HandleMenuToggleRequest());
             WeakReferenceMessenger.Default.Register<TextSelectionStartedMessage>(this, (r, m) => MainThread.BeginInvokeOnMainThread(() => IsMenuVisible = false));
 
-            // 【核心枢纽】：监听 Android 底层原生菜单传来的指令
             WeakReferenceMessenger.Default.Register<GranularTextSelectedMessage>(this, async (r, m) =>
             {
                 ExtractTargetParagraph = m.SelectedText;
 
-                if (m.ActionCommand == "COPY")
-                {
-                    await Clipboard.Default.SetTextAsync(m.SelectedText);
-                }
+                if (m.ActionCommand == "COPY") { await Clipboard.Default.SetTextAsync(m.SelectedText); }
                 else if (m.ActionCommand == "NOTE")
                 {
-                    // 呼出写想法的工作台
                     MainThread.BeginInvokeOnMainThread(() =>
                     {
                         UserNoteInput = string.Empty;
@@ -97,11 +110,7 @@ namespace MonoRead.App.ViewModels
                         IsMenuVisible = false;
                     });
                 }
-                else
-                {
-                    // 传过来的是颜色十六进制代码，直接静默保存
-                    await SaveHighlightSilentlyAsync(m.ActionCommand, m.SelectedText);
-                }
+                else { await SaveHighlightSilentlyAsync(m.ActionCommand, m.SelectedText); }
             });
         }
 
@@ -120,7 +129,6 @@ namespace MonoRead.App.ViewModels
                 {
                     var sortedChapters = CurrentBook.Chapters.OrderBy(c => c.SortOrder).ToList();
                     ChaptersList = new ObservableCollection<BookChapter>(sortedChapters);
-
                     var targetChapter = sortedChapters.First();
 
                     if (!string.IsNullOrWhiteSpace(CurrentBook.ProgressLocator) && CurrentBook.ProgressLocator != "{}")
@@ -165,17 +173,10 @@ namespace MonoRead.App.ViewModels
                     endCharIndex = doc.RootElement.GetProperty("position").GetInt64();
                 }
 
-                // ==============================================================================
-                // 【核心修复】：剥离旧的绝对路径，动态拼接当前设备的真实沙盒路径！
-                // ==============================================================================
                 string fileName = Path.GetFileName(CurrentBook.FilePath);
                 string actualDevicePath = Path.Combine(Microsoft.Maui.Storage.FileSystem.AppDataDirectory, fileName);
 
-                if (!File.Exists(actualDevicePath))
-                {
-                    // 防御性编程：如果云端恢复只恢复了数据库没恢复源文件，打断无限加载连击
-                    return "【文件缺失】未能找到该书籍的本地源文件。请确认云端备份是否完整包含了小说文件。";
-                }
+                if (!File.Exists(actualDevicePath)) return "【文件缺失】未能找到该书籍的本地源文件。请确认云端备份是否完整包含了小说文件。";
 
                 int lengthToRead = endCharIndex == long.MaxValue ? 20000 : (int)(endCharIndex - startCharIndex);
                 if (lengthToRead <= 0) return "（本章暂无正文内容）";
@@ -204,10 +205,7 @@ namespace MonoRead.App.ViewModels
         private FormattedString BuildFormattedParagraph(string paragraphText, List<BookNote> chapterNotes)
         {
             var formattedString = new FormattedString();
-
-            var matchedNotes = chapterNotes
-                .Where(n => !string.IsNullOrWhiteSpace(n.SelectedText) && paragraphText.Contains(n.SelectedText))
-                .ToList();
+            var matchedNotes = chapterNotes.Where(n => !string.IsNullOrWhiteSpace(n.SelectedText) && paragraphText.Contains(n.SelectedText)).ToList();
 
             if (!matchedNotes.Any())
             {
@@ -227,20 +225,12 @@ namespace MonoRead.App.ViewModels
             foreach (var occurrence in noteOccurrences)
             {
                 if (occurrence.Index < currentIndex) continue;
-
                 if (occurrence.Index > currentIndex)
                 {
                     formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex, occurrence.Index - currentIndex) });
                 }
-
                 string colorHex = string.IsNullOrEmpty(occurrence.Note.Color) ? "#FFF9C4" : occurrence.Note.Color;
-
-                formattedString.Spans.Add(new Span
-                {
-                    Text = occurrence.Note.SelectedText,
-                    BackgroundColor = Color.FromArgb(colorHex)
-                });
-
+                formattedString.Spans.Add(new Span { Text = occurrence.Note.SelectedText, BackgroundColor = Color.FromArgb(colorHex) });
                 currentIndex = occurrence.Index + occurrence.Note.SelectedText.Length;
             }
 
@@ -248,7 +238,6 @@ namespace MonoRead.App.ViewModels
             {
                 formattedString.Spans.Add(new Span { Text = paragraphText.Substring(currentIndex) });
             }
-
             return formattedString;
         }
 
@@ -269,24 +258,6 @@ namespace MonoRead.App.ViewModels
                     .Select(p => "　　" + p.Trim())
                     .ToList();
 
-                var paragraphsUi = new ObservableCollection<ParagraphUiModel>();
-                foreach (var text in rawParagraphs)
-                {
-                    paragraphsUi.Add(new ParagraphUiModel
-                    {
-                        RawText = text,
-                        FormattedText = BuildFormattedParagraph(text, chapterNotes)
-                    });
-                }
-
-                var newNode = new ReaderChapterNode
-                {
-                    ChapterId = targetChapter.Id,
-                    Title = targetChapter.Title,
-                    Content = extractedContent,
-                    Paragraphs = paragraphsUi
-                };
-
                 CurrentChapter = targetChapter;
                 ChapterTitle = targetChapter.Title;
                 CanGoPrevious = CurrentBook.Chapters.Any(c => c.SortOrder < targetChapter.SortOrder);
@@ -294,8 +265,99 @@ namespace MonoRead.App.ViewModels
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    if (clearStream) ReadingStream.Clear();
-                    ReadingStream.Add(newNode);
+                    if (IsScrollMode)
+                    {
+                        // ==================== 瀑布流模式 ====================
+                        if (clearStream) ReadingStream.Clear();
+
+                        var paragraphsUi = new List<ParagraphUiModel>();
+                        foreach (var text in rawParagraphs)
+                        {
+                            paragraphsUi.Add(new ParagraphUiModel { RawText = text, FormattedText = BuildFormattedParagraph(text, chapterNotes) });
+                        }
+
+                        var newNode = new ReaderChapterNode
+                        {
+                            ChapterId = targetChapter.Id,
+                            Title = targetChapter.Title,
+                            Content = extractedContent,
+                            Paragraphs = new ObservableCollection<ParagraphUiModel>(paragraphsUi)
+                        };
+                        ReadingStream.Add(newNode);
+                    }
+                    else
+                    {
+                        // ==================== 翻页流模式 ====================
+                        if (clearStream) PagedStream.Clear();
+
+                        int charsPerPage = 550; // 假设每页容纳 550 个字
+
+                        // 第 1 步：先按照你定义的标准领域模型 (ReaderPageNode) 进行切页，保证底层纯洁性
+                        var domainPages = new List<ReaderPageNode>();
+                        int currentPageCharCount = 0;
+                        string currentPageContent = "";
+                        int pageIndex = 1;
+
+                        foreach (var p in rawParagraphs)
+                        {
+                            currentPageContent += p + "\n";
+                            currentPageCharCount += p.Length;
+
+                            if (currentPageCharCount >= charsPerPage)
+                            {
+                                domainPages.Add(new ReaderPageNode
+                                {
+                                    ChapterId = targetChapter.Id,
+                                    ChapterTitle = targetChapter.Title,
+                                    Content = currentPageContent.TrimEnd('\n'),
+                                    PageIndex = pageIndex
+                                });
+                                pageIndex++;
+                                currentPageContent = "";
+                                currentPageCharCount = 0;
+                            }
+                        }
+
+                        // 收尾最后一页
+                        if (!string.IsNullOrWhiteSpace(currentPageContent))
+                        {
+                            domainPages.Add(new ReaderPageNode
+                            {
+                                ChapterId = targetChapter.Id,
+                                ChapterTitle = targetChapter.Title,
+                                Content = currentPageContent.TrimEnd('\n'),
+                                PageIndex = pageIndex
+                            });
+                        }
+
+                        // 回填总页数
+                        int totalPages = domainPages.Count;
+                        foreach (var dp in domainPages) dp.TotalPagesInChapter = totalPages;
+
+                        // 第 2 步：将标准领域模型转化为支持多色高亮的 UI 模型 (ReaderPageUiModel)
+                        foreach (var dp in domainPages)
+                        {
+                            var uiPage = new ReaderPageUiModel
+                            {
+                                ChapterId = dp.ChapterId,
+                                Title = dp.ChapterTitle,
+                                PageIndicator = $"{dp.PageIndex} / {dp.TotalPagesInChapter}"
+                            };
+
+                            var pageRawParagraphs = dp.Content.Split('\n');
+                            foreach (var prp in pageRawParagraphs)
+                            {
+                                uiPage.Paragraphs.Add(new ParagraphUiModel
+                                {
+                                    RawText = prp,
+                                    FormattedText = BuildFormattedParagraph(prp, chapterNotes)
+                                });
+                            }
+
+                            PagedStream.Add(uiPage);
+                        }
+                    }
+
                     _lastLoadedSortOrder = targetChapter.SortOrder;
                 });
 
@@ -317,10 +379,12 @@ namespace MonoRead.App.ViewModels
                 foreach (var node in ReadingStream)
                 {
                     var chapterNotes = allNotes.Where(n => n.ChapterId == node.ChapterId && !n.IsDeleted).ToList();
-                    foreach (var p in node.Paragraphs)
-                    {
-                        p.FormattedText = BuildFormattedParagraph(p.RawText, chapterNotes);
-                    }
+                    foreach (var p in node.Paragraphs) p.FormattedText = BuildFormattedParagraph(p.RawText, chapterNotes);
+                }
+                foreach (var page in PagedStream)
+                {
+                    var chapterNotes = allNotes.Where(n => n.ChapterId == page.ChapterId && !n.IsDeleted).ToList();
+                    foreach (var p in page.Paragraphs) p.FormattedText = BuildFormattedParagraph(p.RawText, chapterNotes);
                 }
             });
         }
@@ -336,9 +400,12 @@ namespace MonoRead.App.ViewModels
         [RelayCommand]
         private async Task PreviousChapterAsync()
         {
-            if (CurrentBook == null || IsLoading || !ReadingStream.Any()) return;
-            var firstNodeId = ReadingStream.First().ChapterId;
-            var firstChapter = CurrentBook.Chapters.FirstOrDefault(c => c.Id == firstNodeId);
+            if (CurrentBook == null || IsLoading) return;
+
+            var firstChapterId = IsScrollMode && ReadingStream.Any() ? ReadingStream.First().ChapterId :
+                                 (!IsScrollMode && PagedStream.Any() ? PagedStream.First().ChapterId : Guid.Empty);
+
+            var firstChapter = CurrentBook.Chapters.FirstOrDefault(c => c.Id == firstChapterId);
             if (firstChapter == null) return;
             var prevChapter = CurrentBook.Chapters.Where(c => c.SortOrder < firstChapter.SortOrder).OrderByDescending(c => c.SortOrder).FirstOrDefault();
             if (prevChapter != null) await LoadChapterIntoStreamAsync(prevChapter, clearStream: true);
@@ -347,102 +414,58 @@ namespace MonoRead.App.ViewModels
         [RelayCommand]
         private async Task NextChapterAsync()
         {
-            if (CurrentBook == null || IsLoading || !ReadingStream.Any()) return;
-            var lastNodeId = ReadingStream.Last().ChapterId;
-            var lastChapter = CurrentBook.Chapters.FirstOrDefault(c => c.Id == lastNodeId);
+            if (CurrentBook == null || IsLoading) return;
+
+            var lastChapterId = IsScrollMode && ReadingStream.Any() ? ReadingStream.Last().ChapterId :
+                                (!IsScrollMode && PagedStream.Any() ? PagedStream.Last().ChapterId : Guid.Empty);
+
+            var lastChapter = CurrentBook.Chapters.FirstOrDefault(c => c.Id == lastChapterId);
             if (lastChapter == null) return;
             var nextChapter = CurrentBook.Chapters.Where(c => c.SortOrder > lastChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
             if (nextChapter != null) await LoadChapterIntoStreamAsync(nextChapter, clearStream: true);
         }
 
-        [RelayCommand]
-        private void ProcessTap() => HandleMenuToggleRequest();
+        [RelayCommand] private void ProcessTap() => HandleMenuToggleRequest();
 
         private void HandleMenuToggleRequest()
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                if (IsNoteOverlayVisible)
-                {
-                    CloseAllMenus();
-                    return;
-                }
+                if (IsNoteOverlayVisible) { CloseAllMenus(); return; }
                 if ((DateTime.Now - _lastToggleTime).TotalMilliseconds < 350) return;
-
                 _lastToggleTime = DateTime.Now;
                 IsMenuVisible = !IsMenuVisible;
             });
         }
 
-        // ====================================================================
-        // 【核心落地】：底层菜单传来的静默划线保存
-        // ====================================================================
         private async Task SaveHighlightSilentlyAsync(string colorHex, string selectedText)
         {
             if (CurrentBook == null || CurrentChapter == null || string.IsNullOrWhiteSpace(selectedText)) return;
-
-            var note = new BookNote
-            {
-                Id = Guid.NewGuid(),
-                BookId = CurrentBook.Id,
-                ChapterId = CurrentChapter.Id,
-                BookTitle = CurrentBook.Title,
-                SelectedText = selectedText,
-                UserComment = string.Empty,  // 想法为空
-                Color = colorHex,            // 记录选中的莫兰迪色
-                CreatedAt = DateTime.UtcNow,
-                IsDeleted = false
-            };
-
+            var note = new BookNote { Id = Guid.NewGuid(), BookId = CurrentBook.Id, ChapterId = CurrentChapter.Id, BookTitle = CurrentBook.Title, SelectedText = selectedText, UserComment = string.Empty, Color = colorHex, CreatedAt = DateTime.UtcNow, IsDeleted = false };
             await _noteRepository.AddAsync(note);
             await RefreshHighlightingAsync();
         }
 
-        [RelayCommand]
-        private void CloseAllMenus()
-        {
-            IsNoteOverlayVisible = false;
-        }
+        [RelayCommand] private void CloseAllMenus() => IsNoteOverlayVisible = false;
 
-        // 深度工作台：保存带想法的笔记
         [RelayCommand]
         private async Task SaveNoteWithCommentAsync()
         {
             if (CurrentBook == null || CurrentChapter == null || string.IsNullOrWhiteSpace(ExtractTargetParagraph)) return;
-
-            var note = new BookNote
-            {
-                Id = Guid.NewGuid(),
-                BookId = CurrentBook.Id,
-                ChapterId = CurrentChapter.Id,
-                BookTitle = CurrentBook.Title,
-                SelectedText = ExtractTargetParagraph,
-                UserComment = UserNoteInput,
-                Color = "#FFF9C4", // 手动写想法时，默认给一个浅黄色背景
-                CreatedAt = DateTime.UtcNow,
-                IsDeleted = false
-            };
-
+            var note = new BookNote { Id = Guid.NewGuid(), BookId = CurrentBook.Id, ChapterId = CurrentChapter.Id, BookTitle = CurrentBook.Title, SelectedText = ExtractTargetParagraph, UserComment = UserNoteInput, Color = "#FFF9C4", CreatedAt = DateTime.UtcNow, IsDeleted = false };
             await _noteRepository.AddAsync(note);
             await RefreshHighlightingAsync();
             CloseAllMenus();
         }
 
-        // ==================== 界面控制 ====================
         [RelayCommand]
         private async Task GoBackAsync()
         {
-            // 结算本次阅读时长
             var duration = (int)(DateTime.UtcNow - _sessionStartTime).TotalSeconds;
-
-            // 如果阅读超过 10 秒，才记入数据库（防误触刷时长）
-            if (duration > 10)
-            {
-                await _recordRepository.AddDurationAsync(DateTime.UtcNow, duration);
-            }
-
+            if (duration > 10) await _recordRepository.AddDurationAsync(DateTime.UtcNow, duration);
             await Shell.Current.GoToAsync("..");
         }
+
         [RelayCommand] private void ToggleToc() { IsTocVisible = !IsTocVisible; if (IsTocVisible) IsMenuVisible = false; }
         [RelayCommand] private async Task SelectChapterAsync(BookChapter chapter) { if (chapter == null) return; IsTocVisible = false; IsMenuVisible = false; await LoadChapterIntoStreamAsync(chapter, clearStream: true); }
         [RelayCommand] private void IncreaseFont() { if (ReaderFontSize < 36) { ReaderFontSize += 2; Preferences.Default.Set("ReaderFontSize", ReaderFontSize); } }

@@ -26,12 +26,24 @@ namespace MonoRead.App.ViewModels
 
         // 绑定的热力图数据源
         [ObservableProperty] private ObservableCollection<HeatmapBox> _heatBoxes = new();
+
+
+        // =========================================================
+        // 【新增】：阅读模式开关 (默认 false = 翻页模式)
+        // =========================================================
+        [ObservableProperty]
+        private bool _isScrollMode = Preferences.Default.Get("IsScrollMode", false);
+
         public SettingsViewModel(IReadingRecordRepository recordRepository)
         {
             _recordRepository = recordRepository;
             LoadStatisticsAsync();
         }
-
+        partial void OnIsScrollModeChanged(bool value)
+        {
+            // 当开关拨动时，立刻保存到本地
+            Preferences.Default.Set("IsScrollMode", value);
+        }
         private async void LoadStatisticsAsync()
         {
             // 获取过去 90 天的数据（适合手机横向显示）

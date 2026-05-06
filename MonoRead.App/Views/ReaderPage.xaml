@@ -9,8 +9,9 @@
              BackgroundColor="{Binding PageBackgroundColor}">
 
     <Grid>
-        <!-- ==================== 图层 1：底层瀑布流阅读区 ==================== -->
-        <Grid RowDefinitions="*, Auto">
+        <!-- ==================== 图层 1A：传统瀑布流阅读区 ==================== -->
+        <!-- 通过 IsScrollMode 开关控制显示 -->
+        <Grid RowDefinitions="*, Auto" IsVisible="{Binding IsScrollMode}">
 
             <CollectionView Grid.Row="0"
                             ItemsSource="{Binding ReadingStream}"
@@ -30,7 +31,6 @@
                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Paragraphs}" Spacing="15">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate>
-                                        <!-- 【交互回归】：没有任何 XAML 手势！仅保留 ReadingText 样式供原生底层劫持注入长按选词光标 -->
                                         <Label FormattedText="{Binding FormattedText}" 
                                                StyleClass="ReadingText"
                                                FontSize="{Binding BindingContext.ReaderFontSize, Source={x:Reference RootPage}}" 
@@ -70,6 +70,48 @@
             </Grid>
         </Grid>
 
+        <!-- ==================== 图层 1B：全新的左右翻页区 ==================== -->
+        <!-- 注意这里使用了 DataTrigger，当 IsScrollMode 为 False 时，它才显示 -->
+        <CarouselView ItemsSource="{Binding PagedStream}" Loop="False" PeekAreaInsets="0" IsVisible="False">
+            <CarouselView.Triggers>
+                <DataTrigger TargetType="CarouselView" Binding="{Binding IsScrollMode}" Value="False">
+                    <Setter Property="IsVisible" Value="True"/>
+                </DataTrigger>
+            </CarouselView.Triggers>
+            <CarouselView.ItemTemplate>
+                <DataTemplate>
+                    <Grid RowDefinitions="Auto, *, Auto" Padding="20,40,20,15">
+                        <Grid.GestureRecognizers>
+                            <!-- 翻页模式下点击屏幕中心唤出菜单 -->
+                            <TapGestureRecognizer Command="{Binding BindingContext.ProcessTapCommand, Source={x:Reference RootPage}}" />
+                        </Grid.GestureRecognizers>
+
+                        <!-- 顶部：章节标题小字 -->
+                        <Label Grid.Row="0" Text="{Binding Title}" FontSize="11" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" Margin="0,0,0,15" LineBreakMode="TailTruncation" MaxLines="1"/>
+
+                        <!-- 中间：当前页的正文内容 -->
+                        <VerticalStackLayout Grid.Row="1" BindableLayout.ItemsSource="{Binding Paragraphs}" Spacing="15">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate>
+                                    <Label FormattedText="{Binding FormattedText}" 
+                                           StyleClass="ReadingText" 
+                                           FontSize="{Binding BindingContext.ReaderFontSize, Source={x:Reference RootPage}}" 
+                                           LineHeight="1.8" 
+                                           TextColor="{Binding BindingContext.TextPrimaryColor, Source={x:Reference RootPage}}" />
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+
+                        <!-- 底部：书名和翻页进度状态 -->
+                        <Grid Grid.Row="2" ColumnDefinitions="Auto, *, Auto" Margin="0,20,0,0">
+                            <Label Grid.Column="1" Text="{Binding BindingContext.ChapterTitle, Source={x:Reference RootPage}}" FontSize="11" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" HorizontalOptions="Center" VerticalOptions="Center" LineBreakMode="TailTruncation" MaxLines="1"/>
+                            <Label Grid.Column="2" Text="{Binding PageIndicator}" FontSize="11" TextColor="{Binding BindingContext.StatusTextColor, Source={x:Reference RootPage}}" HorizontalOptions="End" VerticalOptions="Center"/>
+                        </Grid>
+                    </Grid>
+                </DataTemplate>
+            </CarouselView.ItemTemplate>
+        </CarouselView>
+
         <!-- ==================== 图层 2：悬浮设置菜单栏 ==================== -->
         <Grid RowDefinitions="Auto, *, Auto" IsVisible="{Binding IsMenuVisible}" BackgroundColor="Transparent">
             <!-- 退出菜单的透明遮罩 -->
@@ -89,8 +131,8 @@
                     <Grid ColumnDefinitions="Auto, *">
                         <Button Grid.Column="0" Text="三 目录" Command="{Binding ToggleTocCommand}" BackgroundColor="Transparent" TextColor="White" FontSize="16" />
                         <HorizontalStackLayout Grid.Column="1" HorizontalOptions="End" Spacing="10" VerticalOptions="Center">
-                            <Button Text="上一章" Command="{Binding PreviousChapterCommand}" IsEnabled="{Binding CanGoPrevious}" BackgroundColor="Transparent" TextColor="#AAAAAA" FontSize="12" Padding="5"/>
-                            <Button Text="下一章" Command="{Binding NextChapterCommand}" IsEnabled="{Binding CanGoNext}" BackgroundColor="Transparent" TextColor="#AAAAAA" FontSize="12" Padding="5"/>
+                            <Button Text="上一章" Command="{Binding PreviousChapterCommand}" BackgroundColor="Transparent" TextColor="#AAAAAA" FontSize="12" Padding="5"/>
+                            <Button Text="下一章" Command="{Binding NextChapterCommand}" BackgroundColor="Transparent" TextColor="#AAAAAA" FontSize="12" Padding="5"/>
                         </HorizontalStackLayout>
                     </Grid>
                     <BoxView HeightRequest="1" Color="#33FFFFFF" />

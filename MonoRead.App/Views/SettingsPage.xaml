@@ -70,7 +70,22 @@
                     </VerticalStackLayout>
                 </Border>
 
+                <!-- ==================== 新增：阅读偏好设置 ==================== -->
+                <Label Text="阅读体验" FontSize="13" TextColor="#999999" Margin="25,0,0,10" />
+                <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,25">
+                    <Grid Padding="20,12" ColumnDefinitions="Auto, *, Auto">
+                        <Label Grid.Column="0" Text="📜" FontSize="18" VerticalOptions="Center" Margin="0,0,15,0"/>
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                            <Label Text="启用瀑布流模式" FontSize="16" TextColor="#333333" />
+                            <Label Text="关闭时为左右翻页模式" FontSize="11" TextColor="#999999" Margin="0,2,0,0"/>
+                        </VerticalStackLayout>
+                        <!-- 核心开关，绑定 ViewModel -->
+                        <Switch Grid.Column="2" IsToggled="{Binding IsScrollMode}" OnColor="#D1A67B" VerticalOptions="Center" />
+                    </Grid>
+                </VerticalStackLayout>
+
                 <!-- ==================== 模块组 1：数据管理 ==================== -->
+                <Label Text="数据与系统" FontSize="13" TextColor="#999999" Margin="25,0,0,10" />
                 <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,15">
 
                     <!-- Item 1: 回收站 -->
