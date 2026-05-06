@@ -23,11 +23,10 @@
         <!-- 核心内容区：大面积留白，垂直居中排布 -->
         <VerticalStackLayout Grid.Row="1" VerticalOptions="Center" HorizontalOptions="Center" Spacing="8">
             <!-- 产品信息 -->
-            <Label Text="MonoRead" FontSize="26" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" />
-            <Label Text="V1.6" FontSize="14" TextColor="#999999" HorizontalOptions="Center" Margin="0,0,0,20"/>
+            <Label Text="FableReader" FontSize="26" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" />
+            <Label Text="V1.7" FontSize="14" TextColor="#999999" HorizontalOptions="Center" Margin="0,0,0,20"/>
 
             <!-- 扩展字段 -->
-            <Label Text="出品机构: MonoCraft Studio" FontSize="15" TextColor="#666666" HorizontalOptions="Center" />
             <Label Text="研发作者: Dr.Shawn" FontSize="15" TextColor="#666666" HorizontalOptions="Center" />
 
             <!-- 版权声明 (置于偏底部) -->

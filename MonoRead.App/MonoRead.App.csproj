@@ -45,15 +45,23 @@
 		<InterproceduralOptimization>true</InterproceduralOptimization>
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-android|AnyCPU'">
-	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
-	  <ApplicationTitle>FableReader</ApplicationTitle>
-	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
-	  <AndroidKeyStore>True</AndroidKeyStore>
-	  <AndroidSigningStorePass>381716</AndroidSigningStorePass>
-	  <AndroidSigningKeyAlias>monoread_alias</AndroidSigningKeyAlias>
-	  <AndroidSigningKeyPass>381716</AndroidSigningKeyPass>
-	  <AndroidApkSignerAdditionalArguments>-f net10.0-android -c Release /p:RunAOTCompilation=true /p:PublishTrimmed=true</AndroidApkSignerAdditionalArguments>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
+		<ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+		<ApplicationTitle>FableReader</ApplicationTitle>
+		<ApplicationId>com.fableshub.fablereader</ApplicationId>
+
+		<!-- 开启自动签名 -->
+		<AndroidKeyStore>True</AndroidKeyStore>
+		<AndroidSigningKeyStore>..\monoread.keystore</AndroidSigningKeyStore>
+		<AndroidSigningKeyAlias>monoread_alias</AndroidSigningKeyAlias>
+		<AndroidSigningKeyPass>381716</AndroidSigningKeyPass>
+		<AndroidSigningStorePass>381716</AndroidSigningStorePass>
+
+		<!-- ======================================================== -->
+		<!-- 把你原先写错地方的 AOT 和 裁剪优化，用正确的 XML 标签写在这里 -->
+		<!-- ======================================================== -->
+		<RunAOTCompilation>true</RunAOTCompilation>
+		<PublishTrimmed>true</PublishTrimmed>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-ios|AnyCPU'">
