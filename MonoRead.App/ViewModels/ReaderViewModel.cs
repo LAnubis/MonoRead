@@ -26,19 +26,13 @@ namespace MonoRead.App.ViewModels
         public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
     }
 
-    // =========================================================
-    // 【修改】：加入章节过渡页标识
-    // =========================================================
     public class ReaderPageUiModel
     {
         public Guid ChapterId { get; set; }
         public string Title { get; set; } = string.Empty;
         public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
         public string PageIndicator { get; set; } = string.Empty;
-
-        // 标识是否为“本章完”的过渡页
         public bool IsTransitionPage { get; set; } = false;
-        // 预告下一章的标题
         public string NextChapterTitle { get; set; } = string.Empty;
     }
 
@@ -63,6 +57,8 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty] private ObservableCollection<ReaderChapterNode> _readingStream = new();
         [ObservableProperty] private ObservableCollection<ReaderPageUiModel> _pagedStream = new();
         [ObservableProperty] private bool _isScrollMode;
+
+        [ObservableProperty] private int _currentCarouselPosition = 0;
 
         private int _lastLoadedSortOrder = -1;
 
@@ -96,7 +92,6 @@ namespace MonoRead.App.ViewModels
             _activeInstanceId = _myInstanceId;
 
             IsScrollMode = Preferences.Default.Get("IsScrollMode", false);
-
             ApplyBrightness(ScreenBrightness);
 
             WeakReferenceMessenger.Default.Register<MenuToggleRequestedMessage>(this, (r, m) =>
@@ -144,11 +139,7 @@ namespace MonoRead.App.ViewModels
                 if (activity?.Window != null)
                 {
                     var attributes = activity.Window.Attributes;
-                    if (attributes != null)
-                    {
-                        attributes.ScreenBrightness = (float)value;
-                        activity.Window.Attributes = attributes;
-                    }
+                    if (attributes != null) { attributes.ScreenBrightness = (float)value; activity.Window.Attributes = attributes; }
                 }
 #endif
             });
@@ -159,7 +150,29 @@ namespace MonoRead.App.ViewModels
         {
             ReaderFontFamily = fontName;
             Preferences.Default.Set("ReaderFontFamily", fontName ?? string.Empty);
-            await RefreshHighlightingAsync();
+            if (CurrentChapter != null) await LoadChapterIntoStreamAsync(CurrentChapter, true);
+        }
+
+        [RelayCommand]
+        private async Task IncreaseFontAsync()
+        {
+            if (ReaderFontSize < 36)
+            {
+                ReaderFontSize += 2;
+                Preferences.Default.Set("ReaderFontSize", ReaderFontSize);
+                if (CurrentChapter != null) await LoadChapterIntoStreamAsync(CurrentChapter, true);
+            }
+        }
+
+        [RelayCommand]
+        private async Task DecreaseFontAsync()
+        {
+            if (ReaderFontSize > 12)
+            {
+                ReaderFontSize -= 2;
+                Preferences.Default.Set("ReaderFontSize", ReaderFontSize);
+                if (CurrentChapter != null) await LoadChapterIntoStreamAsync(CurrentChapter, true);
+            }
         }
 
         partial void OnBookIdStringChanged(string value)
@@ -314,64 +327,89 @@ namespace MonoRead.App.ViewModels
                 {
                     if (IsScrollMode)
                     {
-                        if (clearStream) ReadingStream.Clear();
+                        var newReadingStream = new ObservableCollection<ReaderChapterNode>();
+                        if (!clearStream) newReadingStream = new ObservableCollection<ReaderChapterNode>(ReadingStream);
+
                         var paragraphsUi = new List<ParagraphUiModel>();
                         foreach (var text in rawParagraphs) paragraphsUi.Add(new ParagraphUiModel { RawText = text, FormattedText = BuildFormattedParagraph(text, chapterNotes) });
 
-                        ReadingStream.Add(new ReaderChapterNode
+                        newReadingStream.Add(new ReaderChapterNode
                         {
                             ChapterId = targetChapter.Id,
                             Title = targetChapter.Title,
                             Content = extractedContent,
                             Paragraphs = new ObservableCollection<ParagraphUiModel>(paragraphsUi)
                         });
+
+                        ReadingStream = newReadingStream;
                     }
                     else
                     {
-                        if (clearStream) PagedStream.Clear();
-                        int charsPerPage = 550;
-                        var domainPages = new List<ReaderPageUiModel>();
+                        // =====================================================================
+                        // 【终极重构】：2D 空间行数估算模型 (动态填充 99% 的屏幕空间)
+                        // =====================================================================
+                        var newPagedStream = new ObservableCollection<ReaderPageUiModel>();
+
+                        // 根据字号计算缩放率，基准字号假定为 18
+                        double fontRatio = 18.0 / ReaderFontSize;
+
+                        // 估算当前手机屏幕一行能放多少字 (字号越大，单行字数越少)
+                        int charsPerLine = (int)Math.Max(10, 20 * fontRatio);
+
+                        // 估算一屏高度最多能容纳多少行正文 (结合目前绝大多数全面屏手机的高度)
+                        double maxLinesPerPage = Math.Max(15, 29 * fontRatio);
+
                         string currentPageContent = "";
-                        int currentCharCount = 0;
+                        double currentPageLines = 0; // 记录当前页已占据的行高
                         int pageIndex = 1;
 
                         foreach (var p in rawParagraphs)
                         {
-                            currentPageContent += p + "\n";
-                            currentCharCount += p.Length;
+                            // 测算这一个段落需要跨越几行 (向上取整)
+                            int paragraphLines = (int)Math.Ceiling((double)p.Length / charsPerLine);
 
-                            if (currentCharCount >= charsPerPage)
+                            // 每个段落下方有 Spacing="15" 的物理留白，大约相当于额外 0.8 行的高度
+                            double totalParagraphCost = paragraphLines + 0.8;
+
+                            // 判断装载这个段落后，会不会爆开屏幕容量
+                            if (currentPageLines + totalParagraphCost > maxLinesPerPage && currentPageLines > 0)
                             {
+                                // 当前页装满了，立刻封口生成新页
                                 var uiPage = new ReaderPageUiModel { ChapterId = targetChapter.Id, Title = targetChapter.Title };
                                 foreach (var prp in currentPageContent.TrimEnd('\n').Split('\n'))
                                     uiPage.Paragraphs.Add(new ParagraphUiModel { RawText = prp, FormattedText = BuildFormattedParagraph(prp, chapterNotes) });
-                                domainPages.Add(uiPage);
-                                currentPageContent = "";
-                                currentCharCount = 0;
+                                newPagedStream.Add(uiPage);
+
+                                // 清空篮子，把这个段落放进下一页的开头
+                                currentPageContent = p + "\n";
+                                currentPageLines = totalParagraphCost;
                                 pageIndex++;
+                            }
+                            else
+                            {
+                                // 还没满，继续往当前页里塞
+                                currentPageContent += p + "\n";
+                                currentPageLines += totalParagraphCost;
                             }
                         }
 
+                        // 收尾最后一页的残余文字
                         if (!string.IsNullOrWhiteSpace(currentPageContent))
                         {
                             var uiPage = new ReaderPageUiModel { ChapterId = targetChapter.Id, Title = targetChapter.Title };
                             foreach (var prp in currentPageContent.TrimEnd('\n').Split('\n'))
                                 uiPage.Paragraphs.Add(new ParagraphUiModel { RawText = prp, FormattedText = BuildFormattedParagraph(prp, chapterNotes) });
-                            domainPages.Add(uiPage);
+                            newPagedStream.Add(uiPage);
                         }
 
-                        int totalPages = domainPages.Count;
+                        int totalPages = newPagedStream.Count;
                         for (int i = 0; i < totalPages; i++)
                         {
-                            domainPages[i].PageIndicator = $"{i + 1} / {totalPages}";
-                            PagedStream.Add(domainPages[i]);
+                            newPagedStream[i].PageIndicator = $"{i + 1} / {totalPages}";
                         }
 
-                        // =================================================================
-                        // 【核心修复】：追加“本章完”过渡页
-                        // =================================================================
                         var nextChap = CurrentBook.Chapters.Where(c => c.SortOrder > targetChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
-                        PagedStream.Add(new ReaderPageUiModel
+                        newPagedStream.Add(new ReaderPageUiModel
                         {
                             ChapterId = targetChapter.Id,
                             Title = targetChapter.Title,
@@ -379,6 +417,9 @@ namespace MonoRead.App.ViewModels
                             NextChapterTitle = nextChap?.Title ?? string.Empty,
                             PageIndicator = "本章完"
                         });
+
+                        PagedStream = newPagedStream;
+                        CurrentCarouselPosition = 0;
                     }
 
                     _lastLoadedSortOrder = targetChapter.SortOrder;
@@ -499,8 +540,6 @@ namespace MonoRead.App.ViewModels
 
         [RelayCommand] private void ToggleToc() { IsTocVisible = !IsTocVisible; if (IsTocVisible) IsMenuVisible = false; }
         [RelayCommand] private async Task SelectChapterAsync(BookChapter chapter) { if (chapter == null) return; IsTocVisible = false; IsMenuVisible = false; await LoadChapterIntoStreamAsync(chapter, clearStream: true); }
-        [RelayCommand] private void IncreaseFont() { if (ReaderFontSize < 36) { ReaderFontSize += 2; Preferences.Default.Set("ReaderFontSize", ReaderFontSize); } }
-        [RelayCommand] private void DecreaseFont() { if (ReaderFontSize > 12) { ReaderFontSize -= 2; Preferences.Default.Set("ReaderFontSize", ReaderFontSize); } }
 
         [RelayCommand]
         private void ChangeTheme(string themeType)
