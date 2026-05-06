@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MonoRead.App.Views.ReadingStatsPage"
+             Shell.NavBarIsVisible="False"
+             Shell.TabBarIsVisible="False"
+             BackgroundColor="#F7F7F7">
+
+    <Grid RowDefinitions="Auto, *">
+
+        <!-- 1. 顶部导航栏 -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="15,50,15,10" BackgroundColor="#F7F7F7">
+            <Grid Grid.Column="0" Padding="10,5" BackgroundColor="Transparent">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding GoBackCommand}" />
+                </Grid.GestureRecognizers>
+                <Label Text="← 返回" FontSize="16" TextColor="#333333" VerticalOptions="Center"/>
+            </Grid>
+            <Label Grid.Column="1" Text="阅读日历" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center"/>
+            <ContentView Grid.Column="2" WidthRequest="60"/>
+        </Grid>
+
+        <!-- 2. 主体滚动区 -->
+        <ScrollView Grid.Row="1" VerticalScrollBarVisibility="Never">
+            <VerticalStackLayout Spacing="0" Padding="20,10,20,40">
+
+                <!-- ==================== 日历面板 ==================== -->
+                <Border BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 16" StrokeThickness="0" Padding="20">
+                    <Border.Shadow>
+                        <Shadow Brush="#000000" Offset="0,4" Radius="10" Opacity="0.04" />
+                    </Border.Shadow>
+
+                    <VerticalStackLayout Spacing="20">
+
+                        <!-- 月份切换控制器 -->
+                        <Grid ColumnDefinitions="Auto, *, Auto">
+                            <Button Grid.Column="0" Text="〈" Command="{Binding PreviousMonthCommand}" BackgroundColor="Transparent" TextColor="#999999" FontSize="18" FontAttributes="Bold" WidthRequest="40"/>
+                            <Label Grid.Column="1" Text="{Binding CurrentMonthYearDisplay}" FontSize="18" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" VerticalOptions="Center" />
+                            <Button Grid.Column="2" Text="〉" Command="{Binding NextMonthCommand}" BackgroundColor="Transparent" TextColor="#999999" FontSize="18" FontAttributes="Bold" WidthRequest="40"/>
+                        </Grid>
+
+                        <!-- 星期表头 -->
+                        <Grid ColumnDefinitions="*,*,*,*,*,*,*" Margin="0,10,0,10">
+                            <Label Grid.Column="0" Text="一" HorizontalOptions="Center" TextColor="#B2B2B2" FontSize="12"/>
+                            <Label Grid.Column="1" Text="二" HorizontalOptions="Center" TextColor="#B2B2B2" FontSize="12"/>
+                            <Label Grid.Column="2" Text="三" HorizontalOptions="Center" TextColor="#B2B2B2" FontSize="12"/>
+                            <Label Grid.Column="3" Text="四" HorizontalOptions="Center" TextColor="#B2B2B2" FontSize="12"/>
+                            <Label Grid.Column="4" Text="五" HorizontalOptions="Center" TextColor="#B2B2B2" FontSize="12"/>
+                            <Label Grid.Column="5" Text="六" HorizontalOptions="Center" TextColor="#B2B2B2" FontSize="12"/>
+                            <Label Grid.Column="6" Text="日" HorizontalOptions="Center" TextColor="#B2B2B2" FontSize="12"/>
+                        </Grid>
+
+                        <!-- 动态日历网格 -->
+                        <CollectionView ItemsSource="{Binding CalendarDays}" SelectionMode="None">
+                            <!-- 核心：7 列自动换行的网格布局 -->
+                            <CollectionView.ItemsLayout>
+                                <GridItemsLayout Orientation="Vertical" Span="7" VerticalItemSpacing="10" />
+                            </CollectionView.ItemsLayout>
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid HeightRequest="40">
+                                        <!-- 日历格子：如果打卡了就是圆形实心底色 -->
+                                        <Border WidthRequest="32" HeightRequest="32" HorizontalOptions="Center" VerticalOptions="Center" 
+                                                BackgroundColor="{Binding BgColor}" 
+                                                StrokeShape="RoundRectangle 16" StrokeThickness="0">
+                                            <Label Text="{Binding DisplayText}" TextColor="{Binding TextColor}" 
+                                                   FontSize="14" HorizontalOptions="Center" VerticalOptions="Center" FontAttributes="Bold"/>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ==================== 数据汇总卡片 ==================== -->
+                <Label Text="阅读汇总" FontSize="16" FontAttributes="Bold" TextColor="#333333" Margin="5,30,0,15" />
+
+                <Grid ColumnDefinitions="*, *, *" ColumnSpacing="15">
+
+                    <!-- 本周 -->
+                    <Border Grid.Column="0" BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 12" StrokeThickness="0" Padding="15,20">
+                        <Border.Shadow>
+                            <Shadow Brush="#000000" Offset="0,4" Radius="8" Opacity="0.03" />
+                        </Border.Shadow>
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="本周读书" FontSize="11" TextColor="#999999" HorizontalOptions="Center" />
+                            <Label Text="{Binding WeekMinutes}" FontSize="24" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" />
+                            <Label Text="分钟" FontSize="10" TextColor="#B2B2B2" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- 本月 -->
+                    <Border Grid.Column="1" BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 12" StrokeThickness="0" Padding="15,20">
+                        <Border.Shadow>
+                            <Shadow Brush="#000000" Offset="0,4" Radius="8" Opacity="0.03" />
+                        </Border.Shadow>
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="本月读书" FontSize="11" TextColor="#999999" HorizontalOptions="Center" />
+                            <Label Text="{Binding MonthMinutes}" FontSize="24" FontAttributes="Bold" TextColor="#D1A67B" HorizontalOptions="Center" />
+                            <Label Text="分钟" FontSize="10" TextColor="#B2B2B2" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- 本年 -->
+                    <Border Grid.Column="2" BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 12" StrokeThickness="0" Padding="15,20">
+                        <Border.Shadow>
+                            <Shadow Brush="#000000" Offset="0,4" Radius="8" Opacity="0.03" />
+                        </Border.Shadow>
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="本年读书" FontSize="11" TextColor="#999999" HorizontalOptions="Center" />
+                            <Label Text="{Binding YearMinutes}" FontSize="24" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" />
+                            <Label Text="分钟" FontSize="10" TextColor="#B2B2B2" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                </Grid>
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

@@ -27,7 +27,9 @@ namespace MonoRead.App.ViewModels
         // 绑定的热力图数据源
         [ObservableProperty] private ObservableCollection<HeatmapBox> _heatBoxes = new();
 
-
+        // 显示在设置页面的总时长（你可以每次 OnAppearing 的时候去刷新这个值）
+        [ObservableProperty]
+        private string _totalReadDisplay = "0分钟";
         // =========================================================
         // 【新增】：阅读模式开关 (默认 false = 翻页模式)
         // =========================================================
@@ -38,6 +40,12 @@ namespace MonoRead.App.ViewModels
         {
             _recordRepository = recordRepository;
             LoadStatisticsAsync();
+        }
+        [RelayCommand]
+        private async Task GoToReadingStatsAsync()
+        {
+            // 使用 Shell 路由进行页面跳转
+            await Shell.Current.GoToAsync(nameof(Views.ReadingStatsPage));
         }
         partial void OnIsScrollModeChanged(bool value)
         {
@@ -150,5 +158,29 @@ namespace MonoRead.App.ViewModels
                 LocalLogger.LogError($"跳转云端配置页面失败: {ex.Message}");
             }
         }
+
+        public async Task LoadTotalReadingTimeAsync()
+        {
+            try
+            {
+                var records = await _recordRepository.GetAllAsync();
+                if (records != null && records.Any())
+                {
+                    long totalSeconds = records.Sum(r => r.DurationSeconds);
+                    int hours = (int)(totalSeconds / 3600);
+                    int minutes = (int)((totalSeconds % 3600) / 60);
+
+                    if (hours > 0)
+                        TotalReadDisplay = $"{hours}小时{minutes}分钟";
+                    else
+                        TotalReadDisplay = $"{minutes}分钟";
+                }
+            }
+            catch (Exception)
+            {
+                TotalReadDisplay = "获取失败";
+            }
+        }
+
     }
 }

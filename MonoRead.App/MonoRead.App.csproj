@@ -46,7 +46,6 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
-		<ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
 		<ApplicationTitle>FableReader</ApplicationTitle>
 		<ApplicationId>com.fableshub.fablereader</ApplicationId>
 
@@ -65,25 +64,25 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-ios|AnyCPU'">
-	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>1.8</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-maccatalyst|AnyCPU'">
-	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>1.8</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-windows10.0.19041.0|AnyCPU'">
-	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>1.8</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
-	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>1.8</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	  <AndroidKeyStore>True</AndroidKeyStore>
@@ -94,21 +93,26 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-ios|AnyCPU'">
-	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>1.8</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-maccatalyst|AnyCPU'">
-	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>1.8</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-windows10.0.19041.0|AnyCPU'">
-	  <ApplicationDisplayVersion>1.7</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>1.8</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-android|AnyCPU'">
+	  <ApplicationDisplayVersion>1.8</ApplicationDisplayVersion>
+	  <ApplicationTitle>FableReader</ApplicationTitle>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -165,6 +169,9 @@
 		</MauiXaml>
 		<MauiXaml Update="Views\ReaderPage.xaml">
 			<Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
+		<MauiXaml Update="Views\ReadingStatsPage.xaml">
+		  <Generator>MSBuild:Compile</Generator>
 		</MauiXaml>
 		<MauiXaml Update="Views\RecentPage.xaml">
 			<Generator>MSBuild:Compile</Generator>

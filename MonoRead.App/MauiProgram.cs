@@ -90,6 +90,10 @@ namespace MonoRead.App
             builder.Services.AddSingleton<IZipArchiveService, MonoRead.Infrastructure.Services.ZipArchiveService>();
             builder.Services.AddSingleton<MonoRead.UseCase.ICloudBackupUseCase, MonoRead.UseCase.CloudBackupUseCase>();
             builder.Services.AddScoped<IReadingRecordRepository, ReadingRecordRepository>();
+
+            builder.Services.AddTransient<ReadingStatsViewModel>();
+            builder.Services.AddTransient<ReadingStatsPage>();
+
             var app = builder.Build();
             using (var scope = app.Services.CreateScope())
             {

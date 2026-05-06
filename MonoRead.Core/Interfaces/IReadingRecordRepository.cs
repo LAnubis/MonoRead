@@ -11,5 +11,7 @@ namespace MonoRead.Core.Interfaces
         Task AddDurationAsync(DateTime date, int seconds);
         // 获取过去 N 天的阅读数据（用于画日历热力图）
         Task<List<ReadingRecord>> GetRecentRecordsAsync(int days);
+        // 【新增】：获取所有阅读记录，供日历热力图使用
+        Task<List<Entities.ReadingRecord>> GetAllAsync();
     }
 }

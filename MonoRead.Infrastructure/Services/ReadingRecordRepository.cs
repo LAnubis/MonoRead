@@ -44,5 +44,11 @@ namespace MonoRead.Infrastructure.Services
                 .OrderBy(r => r.RecordDate)
                 .ToListAsync();
         }
+        public async Task<List<ReadingRecord>> GetAllAsync()
+        {
+            return await _context.ReadingRecords
+                .OrderBy(r => r.RecordDate)
+                .ToListAsync();
+        }
     }
 }
