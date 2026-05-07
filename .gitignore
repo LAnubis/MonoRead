@@ -361,3 +361,23 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# ========================================================
+# 🚀 MonoRead 专属安全拦截规则 (极其重要)
+# ========================================================
+
+# 绝对禁止上传 Android 签名密钥文件！
+*.keystore
+*.jks
+monoread.keystore
+
+# 禁止上传本地测试的 SQLite 数据库文件 (保护你的测试数据不被公开)
+*.db
+*.db3
+*.sqlite
+*.sqlite3
+
+# MAUI 缓存与特定文件
+*.aab
+*.apk
+*.ipa
