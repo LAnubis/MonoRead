@@ -50,9 +50,12 @@ namespace MonoRead.App.ViewModels
         private readonly IBookNoteRepository _noteRepository;
         private readonly IBookRepository _bookRepository;
 
-        [ObservableProperty] private string _bookIdString = string.Empty;
-        [ObservableProperty] private string _bookTitle = string.Empty;
-        [ObservableProperty] private bool _isBusy;
+        [ObservableProperty] 
+        private string _bookIdString = string.Empty;
+        [ObservableProperty] 
+        private string _bookTitle = string.Empty;
+        [ObservableProperty] 
+        private bool _isBusy;
 
         // 分组数据源
         [ObservableProperty] private ObservableCollection<NoteGroup> _groupedNotes = new();
@@ -147,7 +150,7 @@ namespace MonoRead.App.ViewModels
             var selectedNotes = GroupedNotes.SelectMany(g => g).Where(i => i.IsSelected).Select(i => i.Note).ToList();
             if (!selectedNotes.Any()) return;
 
-            bool confirm = await Application.Current.MainPage!.DisplayAlert("确认删除", $"确定要删除选中的 {selectedNotes.Count} 条笔记吗？", "删除", "取消");
+            bool confirm = await Shell.Current.DisplayAlertAsync("确认删除", $"确定要删除选中的 {selectedNotes.Count} 条笔记吗？", "删除", "取消");
             if (!confirm) return;
 
             IsBusy = true;
@@ -166,7 +169,7 @@ namespace MonoRead.App.ViewModels
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage!.DisplayAlert("错误", $"删除失败: {ex.Message}", "确定");
+                await Shell.Current.DisplayAlertAsync("错误", $"删除失败: {ex.Message}", "确定");
             }
             finally { IsBusy = false; }
         }
@@ -182,7 +185,7 @@ namespace MonoRead.App.ViewModels
 
             if (!allNotes.Any())
             {
-                await Application.Current.MainPage!.DisplayAlert("提示", "当前没有可以导出的笔记", "好的");
+                await Shell.Current.DisplayAlertAsync("提示", "当前没有可以导出的笔记", "好的");
                 return;
             }
 
@@ -209,7 +212,7 @@ namespace MonoRead.App.ViewModels
             // 调用 MAUI 原生剪贴板 API
             await Clipboard.Default.SetTextAsync(sb.ToString());
 
-            await Application.Current.MainPage!.DisplayAlert("导出成功", "Markdown 格式的笔记已复制到剪贴板，快去粘贴到你的笔记软件中吧！", "太棒了");
+            await Shell.Current.DisplayAlertAsync("导出成功", "Markdown 格式的笔记已复制到剪贴板，快去粘贴到你的笔记软件中吧！", "太棒了");
         }
 
         [RelayCommand]

@@ -102,7 +102,7 @@ namespace MonoRead.App.ViewModels
         private async Task GoToTrashAsync()
         {
             try { await Shell.Current.GoToAsync("TrashPage"); }
-            catch (Exception) { await Application.Current.MainPage.DisplayAlert("提示", "回收站页面未就绪", "确定"); }
+            catch (Exception) { await Shell.Current.DisplayAlertAsync("提示", "回收站页面未就绪", "确定"); }
         }
 
         [RelayCommand]
@@ -123,13 +123,13 @@ namespace MonoRead.App.ViewModels
                 }
                 else
                 {
-                    await Application.Current.MainPage.DisplayAlert("提示", "今日尚无报错日志产生", "确定");
+                    await Shell.Current.DisplayAlertAsync("提示", "今日尚无报错日志产生", "确定");
                 }
             }
             catch (Exception ex)
             {
                 LocalLogger.LogError($"导出日志失败: {ex.Message}");
-                await Application.Current.MainPage.DisplayAlert("导出失败", ex.Message, "确定");
+                await Shell.Current.DisplayAlertAsync("导出失败", ex.Message, "确定");
             }
         }
 

@@ -15,7 +15,6 @@ namespace MonoRead.Core.Entities
         public string UserComment { get; set; } = string.Empty;
 
         public bool IsOrphan { get; set; } = false;
-        public bool IsDeleted { get; set; } = false;
         // 【补全丢失的字段】：划线颜色（莫兰迪色值），默认给一个浅黄色
         public string Color { get; set; } = "#FFF9C4";
     }

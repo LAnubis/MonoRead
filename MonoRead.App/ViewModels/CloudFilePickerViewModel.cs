@@ -8,18 +8,50 @@ using System.Collections.ObjectModel;
 
 namespace MonoRead.App.ViewModels
 {
+    // =========================================================
+    // 【新增】：UI 专用展示模型，用于绑定 CheckBox 的实时的选中状态
+    // =========================================================
+    public partial class CloudFileUiNode : ObservableObject
+    {
+        public WebDavFileNode OriginalNode { get; set; }
+        public string DisplayName => OriginalNode.DisplayName;
+        public bool IsDirectory => OriginalNode.IsDirectory;
+        public string ContentLength
+        {
+            get
+            {
+                if (OriginalNode.IsDirectory) return ""; // 文件夹不显示大小
+
+                long bytes = OriginalNode.ContentLength;
+                if (bytes < 1024) return $"{bytes} B";
+                if (bytes < 1048576) return $"{(bytes / 1024.0):F1} KB";
+                return $"{(bytes / 1048576.0):F2} MB";
+            }
+        }
+        public string Href => OriginalNode.Href;
+
+        [ObservableProperty]
+        private bool _isSelected;
+    }
+
     public partial class CloudFilePickerViewModel : ObservableObject
     {
         private readonly ICloudStorageService _cloudStorageService;
 
-        [ObservableProperty] private ObservableCollection<WebDavFileNode> _files = new();
+        // 注意这里变成了 CloudFileUiNode
+        [ObservableProperty] private ObservableCollection<CloudFileUiNode> _files = new();
         [ObservableProperty] private bool _isBusy;
-        [ObservableProperty] private string _currentPath = "/"; // 根目录开始
+        [ObservableProperty] private string _currentPath = "/";
 
-        // 用于控制“返回上一级”按钮的显示
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(SelectionStatusText))]
+        [NotifyPropertyChangedFor(nameof(HasSelectedFiles))]
+        private ObservableCollection<CloudFileUiNode> _selectedFilesList = new();
+
+        public string SelectionStatusText => $"已选 {SelectedFilesList.Count}/10";
+        public bool HasSelectedFiles => SelectedFilesList.Count > 0;
         public bool IsNotRoot => CurrentPath != "/";
 
-        // 缓存账号密码（实际生产中这部分也应该加密传递，为简化这里直接读取）
         private string _url = "";
         private string _user = "";
         private string _pass = "";
@@ -29,7 +61,6 @@ namespace MonoRead.App.ViewModels
             _cloudStorageService = cloudStorageService;
         }
 
-        // 页面每次出现时调用
         public async Task InitializeAsync()
         {
             _url = await SecureStorage.Default.GetAsync("WebDav_Url") ?? "";
@@ -38,12 +69,13 @@ namespace MonoRead.App.ViewModels
 
             if (string.IsNullOrEmpty(_url) || string.IsNullOrEmpty(_user) || string.IsNullOrEmpty(_pass))
             {
-                await Application.Current.MainPage!.DisplayAlert("提示", "云盘凭据丢失，请重新配置", "确定");
+                await Shell.Current.DisplayAlertAsync("提示", "云盘凭据丢失，请重新配置", "确定");
                 await Shell.Current.GoToAsync("..");
                 return;
             }
 
             CurrentPath = "/";
+            SelectedFilesList.Clear();
             await LoadDirectoryAsync(CurrentPath);
         }
 
@@ -55,11 +87,23 @@ namespace MonoRead.App.ViewModels
             {
                 var list = await _cloudStorageService.ListFilesAsync(_url, _user, _pass, targetPath);
 
-                // 仅过滤出 文件夹 和 .txt 文件
                 var filteredList = list.Where(f => f.IsDirectory || f.DisplayName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                                       .OrderByDescending(f => f.IsDirectory) // 文件夹排前面
+                                       .OrderByDescending(f => f.IsDirectory)
                                        .ThenBy(f => f.DisplayName)
+                                       .Select(f => new CloudFileUiNode { OriginalNode = f, IsSelected = false }) // 穿上 UI 外衣
                                        .ToList();
+
+                // 【细节体验优化】：如果用户进退文件夹，保持之前打过的勾不消失
+                foreach (var item in filteredList)
+                {
+                    if (SelectedFilesList.Any(s => s.Href == item.Href))
+                    {
+                        item.IsSelected = true;
+                        var oldItem = SelectedFilesList.First(s => s.Href == item.Href);
+                        SelectedFilesList.Remove(oldItem);
+                        SelectedFilesList.Add(item);
+                    }
+                }
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
@@ -71,7 +115,7 @@ namespace MonoRead.App.ViewModels
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage!.DisplayAlert("错误", $"读取目录失败: {ex.Message}", "确定");
+                await Shell.Current.DisplayAlertAsync("错误", $"读取目录失败: {ex.Message}", "确定");
             }
             finally { IsBusy = false; }
         }
@@ -83,7 +127,6 @@ namespace MonoRead.App.ViewModels
         private async Task GoUpDirectoryAsync()
         {
             if (CurrentPath == "/") return;
-            // 简单处理路径退回：/A/B/ -> /A/
             var parts = CurrentPath.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
             if (parts.Count > 0) parts.RemoveAt(parts.Count - 1);
             string parentPath = "/" + string.Join("/", parts) + (parts.Count > 0 ? "/" : "");
@@ -91,29 +134,50 @@ namespace MonoRead.App.ViewModels
         }
 
         [RelayCommand]
-        private async Task OpenNodeAsync(WebDavFileNode node)
+        private async Task OpenNodeAsync(CloudFileUiNode node)
         {
             if (node.IsDirectory)
             {
-                // 【核心修复】：
-                // 1. 坚果云 WebDAV 严格要求目录请求必须以 "/" 结尾，否则抛出 409 异常。
-                // 2. 直接使用 node.Href，避免 Uri 构造函数解析相对路径时抛出崩溃异常。
                 string nextPath = node.Href;
-                if (!nextPath.EndsWith("/"))
-                {
-                    nextPath += "/";
-                }
+                if (!nextPath.EndsWith("/")) nextPath += "/";
                 await LoadDirectoryAsync(nextPath);
             }
             else
             {
-                // 选中了 TXT 文件，发送消息给书架，并关闭自己
-                bool confirm = await Application.Current.MainPage!.DisplayAlert("确认下载", $"即将从云端下载：\n{node.DisplayName}", "开始导入", "取消");
-                if (confirm)
+                // 控制 CheckBox 的勾选状态
+                if (node.IsSelected)
                 {
-                    WeakReferenceMessenger.Default.Send(new CloudFileSelectedMessage(node.Href, node.DisplayName));
-                    await Shell.Current.GoToAsync("..");
+                    node.IsSelected = false;
+                    SelectedFilesList.Remove(node);
                 }
+                else
+                {
+                    if (SelectedFilesList.Count >= 10)
+                    {
+                        await Shell.Current.DisplayAlertAsync("超限", "每次最多只能选择 10 本书籍哦。", "知道了");
+                        return;
+                    }
+                    node.IsSelected = true;
+                    SelectedFilesList.Add(node);
+                }
+
+                OnPropertyChanged(nameof(SelectionStatusText));
+                OnPropertyChanged(nameof(HasSelectedFiles));
+            }
+        }
+
+        [RelayCommand]
+        private async Task ConfirmImportAsync()
+        {
+            if (!SelectedFilesList.Any()) return;
+
+            bool confirm = await Shell.Current.DisplayAlertAsync("确认下载", $"即将从坚果云极速下载 {SelectedFilesList.Count} 本书籍，是否继续？", "开始批量导入", "取消");
+
+            if (confirm)
+            {
+                var payload = SelectedFilesList.Select(f => (f.Href, f.DisplayName)).ToList();
+                WeakReferenceMessenger.Default.Send(new CloudFilesSelectedMessage(payload));
+                await Shell.Current.GoToAsync("..");
             }
         }
     }

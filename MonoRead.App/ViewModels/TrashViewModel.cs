@@ -71,12 +71,12 @@ namespace MonoRead.App.ViewModels
                 // 【核心修复】：强制主线程操作 UI 集合
                 MainThread.BeginInvokeOnMainThread(() => DeletedBooks.Remove(book));
 
-                await Application.Current.MainPage!.DisplayAlert("已恢复", $"《{book.Title}》已重返书架", "确定");
+                await Shell.Current.DisplayAlertAsync("已恢复", $"《{book.Title}》已重返书架", "确定");
                 await LoadTrashDataAsync();
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage!.DisplayAlert("错误", $"恢复失败: {ex.Message}", "确定");
+                await Shell.Current.DisplayAlertAsync("错误", $"恢复失败: {ex.Message}", "确定");
             }
             finally { IsBusy = false; }
         }
@@ -91,7 +91,7 @@ namespace MonoRead.App.ViewModels
 
             if (hasNotes)
             {
-                string action = await Application.Current.MainPage!.DisplayActionSheet(
+                string action = await Shell.Current.DisplayActionSheetAsync(
                     $"彻底销毁《{book.Title}》？此操作不可逆！\n该书包含您的读书笔记：",
                     "取消", "彻底销毁书籍及所有笔记", "仅销毁书籍（笔记保留为未分类）");
 
@@ -101,7 +101,7 @@ namespace MonoRead.App.ViewModels
             }
             else
             {
-                bool confirm = await Application.Current.MainPage!.DisplayAlert("终极警告", $"确定彻底销毁《{book.Title}》吗？", "销毁", "取消");
+                bool confirm = await Shell.Current.DisplayAlertAsync("终极警告", $"确定彻底销毁《{book.Title}》吗？", "销毁", "取消");
                 if (!confirm) return;
             }
 
@@ -121,7 +121,7 @@ namespace MonoRead.App.ViewModels
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage!.DisplayAlert("错误", $"销毁失败: {ex.Message}", "确定");
+                await Shell.Current.DisplayAlertAsync("错误", $"销毁失败: {ex.Message}", "确定");
             }
             finally { IsBusy = false; }
         }
@@ -138,14 +138,14 @@ namespace MonoRead.App.ViewModels
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage!.DisplayAlert("错误", $"恢复失败: {ex.Message}", "确定");
+                await Shell.Current.DisplayAlertAsync("错误", $"恢复失败: {ex.Message}", "确定");
             }
         }
 
         [RelayCommand]
         private async Task HardDeleteNoteAsync(BookNote note)
         {
-            bool confirm = await Application.Current.MainPage!.DisplayAlert("销毁笔记", "彻底删除此条笔记？此操作不可逆。", "销毁", "取消");
+            bool confirm = await Shell.Current.DisplayAlertAsync("销毁笔记", "彻底删除此条笔记？此操作不可逆。", "销毁", "取消");
             if (confirm)
             {
                 try
@@ -156,7 +156,7 @@ namespace MonoRead.App.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    await Application.Current.MainPage!.DisplayAlert("错误", $"销毁失败: {ex.Message}", "确定");
+                    await Shell.Current.DisplayAlertAsync("错误", $"销毁失败: {ex.Message}", "确定");
                 }
             }
         }

@@ -102,7 +102,7 @@ namespace MonoRead.App.ViewModels
         private async Task BackupDataAsync()
         {
             if (IsBusy) return;
-            bool confirm = await Application.Current.MainPage!.DisplayAlert("创建云端快照", "这将会把您当前的书架、进度和笔记安全打包上传至坚果云。\n\n(将自动保留最近的 3 份快照)", "立即备份", "取消");
+            bool confirm = await Shell.Current.DisplayAlertAsync("创建云端快照", "这将会把您当前的书架、进度和笔记安全打包上传至坚果云。\n\n(将自动保留最近的 3 份快照)", "立即备份", "取消");
             if (!confirm) return;
 
             IsBusy = true;
@@ -115,12 +115,12 @@ namespace MonoRead.App.ViewModels
                 string msg = await _backupUseCase.ExecuteBackupAsync(ServerUrl, Username, Password, FileSystem.AppDataDirectory, FileSystem.CacheDirectory);
                 TestResultText = msg; TestResultColor = Colors.Green;
                 await CheckLastBackupTimeAsync();
-                await Application.Current.MainPage.DisplayAlert("太棒了", "数据已安全触达云端。", "确定");
+                await Shell.Current.DisplayAlertAsync("太棒了", "数据已安全触达云端。", "确定");
             }
             catch (Exception ex)
             {
                 TestResultText = "备份失败"; TestResultColor = Colors.Red;
-                await Application.Current.MainPage.DisplayAlert("报错", ex.Message, "确定");
+                await Shell.Current.DisplayAlertAsync("报错", ex.Message, "确定");
             }
             finally { IsBusy = false; }
         }
@@ -130,7 +130,7 @@ namespace MonoRead.App.ViewModels
         {
             if (IsBusy) return;
             // 终极死亡警告！
-            bool confirm1 = await Application.Current.MainPage!.DisplayAlert("⚠️ 危险操作警告", "从云端恢复将【彻底覆盖】您当前手机上的所有小说、进度和笔记！\n此操作不可逆！", "我已清楚风险，继续", "取消");
+            bool confirm1 = await Shell.Current.DisplayAlertAsync("⚠️ 危险操作警告", "从云端恢复将【彻底覆盖】您当前手机上的所有小说、进度和笔记！\n此操作不可逆！", "我已清楚风险，继续", "取消");
             if (!confirm1) return;
 
             IsBusy = true;
@@ -142,13 +142,13 @@ namespace MonoRead.App.ViewModels
                 // 传入 MAUI 环境下的 FileSystem 路径
                 await _backupUseCase.ExecuteRestoreAsync(ServerUrl, Username, Password, FileSystem.AppDataDirectory, FileSystem.CacheDirectory);
                 // 覆盖完成，必须强杀或提示重启，否则 SQLite 缓存死锁
-                await Application.Current.MainPage.DisplayAlert("换心手术成功！", "数据恢复已完成！\n为了让底层数据库重新加载，应用即将强制退出。请在退出后手动重新打开 MonoRead。", "好的，去重启");
+                await Shell.Current.DisplayAlertAsync("换心手术成功！", "数据恢复已完成！\n为了让底层数据库重新加载，应用即将强制退出。请在退出后手动重新打开 MonoRead。", "好的，去重启");
                 System.Diagnostics.Process.GetCurrentProcess().Kill();
             }
             catch (Exception ex)
             {
                 TestResultText = "恢复失败"; TestResultColor = Colors.Red;
-                await Application.Current.MainPage.DisplayAlert("报错", ex.Message, "确定");
+                await Shell.Current.DisplayAlertAsync("报错", ex.Message, "确定");
             }
             finally { IsBusy = false; }
         }

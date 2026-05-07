@@ -7,7 +7,7 @@ namespace MonoRead.Infrastructure.Logging
     public static class LocalLogger
     {
         private static readonly object _lock = new object();
-        private static string _logDirectory;
+        private static string _logDirectory = string.Empty;
 
         // 获取日志存放目录（放在沙盒下的 Logs 文件夹）
         public static string LogDirectory

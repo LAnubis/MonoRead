@@ -13,7 +13,7 @@ namespace MonoRead.Core.Entities
         public DateTime? DeletedAt { get; set; }
 
         // 审计时间戳
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow.ToLocalTime();
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow.ToLocalTime();
     }
 }

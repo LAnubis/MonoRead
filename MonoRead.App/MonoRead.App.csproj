@@ -12,11 +12,7 @@
 		<Nullable>enable</Nullable>
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 		<IsPackable>false</IsPackable>
-		
-		<!-- Display name -->
-		<ApplicationTitle>MonoRead</ApplicationTitle>
-		<!-- App Identifier -->
-		<ApplicationId>com.monocraft.monoread</ApplicationId>
+		<NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
 
 		<!-- ==================================================================== -->
 		<!-- 【核心修复】：显式声明全局版本，强行统一所有目标平台的版本号，终结 NU1105 -->
@@ -36,10 +32,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' == 'net10.0-android'">
-		<!-- 1. 关闭代码裁剪。这会使 APK 体积变大（多出约 10-15MB），但能彻底解决反射被删导致的闪退 -->
-		<PublishTrimmed>false</PublishTrimmed>
-		<!-- 2. 关闭 AOT 编译（如果之前开启了的话，先关闭以排除 AOT 兼容性问题） -->
-		<RunAOTCompilation>false</RunAOTCompilation>
+
 		<!-- 3. 强制指定打包包含 ARM64 架构（目前市面上 99% 的真机都是 arm64-v8a） -->
 		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
 		<InterproceduralOptimization>true</InterproceduralOptimization>
@@ -56,33 +49,32 @@
 		<AndroidSigningKeyPass>381716</AndroidSigningKeyPass>
 		<AndroidSigningStorePass>381716</AndroidSigningStorePass>
 
-		<!-- ======================================================== -->
-		<!-- 把你原先写错地方的 AOT 和 裁剪优化，用正确的 XML 标签写在这里 -->
-		<!-- ======================================================== -->
-		<RunAOTCompilation>true</RunAOTCompilation>
-		<PublishTrimmed>true</PublishTrimmed>
+		<!-- 1. 关闭代码裁剪。这会使 APK 体积变大（多出约 10-15MB），但能彻底解决反射被删导致的闪退 -->
+		<PublishTrimmed>false</PublishTrimmed>
+		<!-- 2. 关闭 AOT 编译（如果之前开启了的话，先关闭以排除 AOT 兼容性问题） -->
+		<RunAOTCompilation>false</RunAOTCompilation>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-ios|AnyCPU'">
-	  <ApplicationDisplayVersion>1.9</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-maccatalyst|AnyCPU'">
-	  <ApplicationDisplayVersion>1.9</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-windows10.0.19041.0|AnyCPU'">
-	  <ApplicationDisplayVersion>1.9</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
-	  <ApplicationDisplayVersion>1.9</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	  <AndroidKeyStore>True</AndroidKeyStore>
@@ -93,34 +85,35 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-ios|AnyCPU'">
-	  <ApplicationDisplayVersion>1.9</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-maccatalyst|AnyCPU'">
-	  <ApplicationDisplayVersion>1.9</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-windows10.0.19041.0|AnyCPU'">
-	  <ApplicationDisplayVersion>1.9</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
 	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-android|AnyCPU'">
-	  <ApplicationDisplayVersion>1.9</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
 	  <ApplicationTitle>FableReader</ApplicationTitle>
+	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<!-- 引用刚才生成的 SVG 文件 -->
 		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#ECEFF1" />
 		<!-- 启动屏建议直接使用前景图，背景设为纯白 -->
-		<MauiSplashScreen Include="Resources\AppIcon\appiconfg.svg" Color="#FFFFFF" BaseSize="128,128" />
-
+		<!--<MauiSplashScreen Include="Resources\AppIcon\appiconfg.svg" Color="#FFFFFF" BaseSize="128,128" />-->
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#FFFFFF" BaseSize="128,128" />
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
 		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
