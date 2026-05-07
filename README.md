@@ -53,4 +53,4 @@ MonoRead 是一款基于 .NET MAUI 构建的现代化跨平台阅读引擎，致
 ### 编译运行
 1. 克隆本仓库：
    ```bash
-   git clone [https://github.com/YourUsername/MonoRead.git](https://github.com/YourUsername/MonoRead.git)
+   git clone [https://github.com/LAnubis/MonoRead.git](https://github.com/LAnubis/MonoRead.git)
