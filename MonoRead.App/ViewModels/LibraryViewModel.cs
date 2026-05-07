@@ -7,6 +7,7 @@ using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure.Logging;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.IO;
 
 namespace MonoRead.App.ViewModels
 {
@@ -16,9 +17,10 @@ namespace MonoRead.App.ViewModels
         private readonly IBookParsingUseCase _bookParsingUseCase;
         private readonly IBookRepository _bookRepository;
         private readonly IFolderRepository _folderRepository;
-
-        // 【修改点 1】：新增云端服务的依赖注入字段
         private readonly ICloudStorageService _cloudStorageService;
+
+        // 【核心修复 1】：全局消息并发锁，彻底斩杀“幽灵 ViewModel”引发的多重重复导入
+        private static bool _isMessengerProcessing = false;
 
         [ObservableProperty] private ObservableCollection<LibraryItemNode> _items = new();
         [ObservableProperty] private bool _isBusy;
@@ -35,7 +37,6 @@ namespace MonoRead.App.ViewModels
         public bool IsNotRoot => CurrentFolder != null;
         public string CurrentPathName => CurrentFolder == null ? "书架" : CurrentFolder.Name;
 
-        // 【修改点 2】：在构造函数签名中加入 ICloudStorageService
         public LibraryViewModel(
             IFileSystemService fileSystemService,
             IBookParsingUseCase bookParsingUseCase,
@@ -47,25 +48,37 @@ namespace MonoRead.App.ViewModels
             _bookParsingUseCase = bookParsingUseCase;
             _bookRepository = bookRepository;
             _folderRepository = folderRepository;
-
-            // 【修改点 3】：完成服务赋值
             _cloudStorageService = cloudStorageService;
 
             LoadItemsCommand.Execute(null);
 
+            // 外部文件导入监听
             WeakReferenceMessenger.Default.Register<FileImportMessage>(this, async (r, m) =>
             {
-                if (App.PendingImportFilePath == m.SandboxPath)
+                if (_isMessengerProcessing) return;
+                _isMessengerProcessing = true;
+                try
                 {
-                    App.PendingImportFilePath = null;
-                    App.PendingImportFileName = null;
+                    if (App.PendingImportFilePath == m.SandboxPath)
+                    {
+                        App.PendingImportFilePath = null;
+                        App.PendingImportFileName = null;
+                    }
+                    await ((LibraryViewModel)r).ProcessImportedFileAsync(m.SandboxPath, m.FileName);
                 }
-                await ProcessImportedFileAsync(m.SandboxPath, m.FileName);
+                finally { _isMessengerProcessing = false; }
             });
 
+            // 云端文件选中监听
             WeakReferenceMessenger.Default.Register<CloudFileSelectedMessage>(this, async (r, m) =>
             {
-                await ProcessCloudImportAsync(m.RemoteFilePath, m.DisplayName);
+                if (_isMessengerProcessing) return;
+                _isMessengerProcessing = true;
+                try
+                {
+                    await ((LibraryViewModel)r).ProcessCloudImportAsync(m.RemoteFilePath, m.DisplayName);
+                }
+                finally { _isMessengerProcessing = false; }
             });
         }
 
@@ -81,36 +94,17 @@ namespace MonoRead.App.ViewModels
                     var folders = await _folderRepository.GetAllAsync();
                     foreach (var f in folders.OrderBy(x => x.SortOrder))
                     {
-                        nodes.Add(new LibraryItemNode
-                        {
-                            IsFolder = true,
-                            Id = f.Id,
-                            Title = f.Name,
-                            Subtitle = "文件夹",
-                            OriginalEntity = f,
-                            ShowCheckBox = IsEditMode
-                        });
+                        nodes.Add(new LibraryItemNode { IsFolder = true, Id = f.Id, Title = f.Name, Subtitle = "文件夹", OriginalEntity = f, ShowCheckBox = IsEditMode });
                     }
                 }
 
                 var allBooks = await _bookRepository.GetAllBooksAsync();
-                var currentLevelBooks = allBooks
-                    .Where(b => !b.IsDeleted && b.FolderId == CurrentFolder?.Id)
-                    .ToList();
+                var currentLevelBooks = allBooks.Where(b => !b.IsDeleted && b.FolderId == CurrentFolder?.Id).ToList();
 
                 foreach (var b in currentLevelBooks)
                 {
                     var fullBook = await _bookRepository.GetBookWithChaptersAsync(b.Id) ?? b;
-
-                    nodes.Add(new LibraryItemNode
-                    {
-                        IsFolder = false,
-                        Id = fullBook.Id,
-                        Title = fullBook.Title,
-                        Subtitle = fullBook.ProgressText,
-                        OriginalEntity = fullBook,
-                        ShowCheckBox = IsEditMode
-                    });
+                    nodes.Add(new LibraryItemNode { IsFolder = false, Id = fullBook.Id, Title = fullBook.Title, Subtitle = fullBook.ProgressText, OriginalEntity = fullBook, ShowCheckBox = IsEditMode });
                 }
 
                 MainThread.BeginInvokeOnMainThread(() =>
@@ -169,14 +163,8 @@ namespace MonoRead.App.ViewModels
             string action = await Application.Current.MainPage!.DisplayActionSheet(
                 "选择导入方式", "取消", null, "本地导入 (TXT)", "坚果云导入 (TXT)");
 
-            if (action == "本地导入 (TXT)")
-            {
-                await ExecuteLocalImportAsync();
-            }
-            else if (action == "坚果云导入 (TXT)")
-            {
-                await ExecuteCloudImportStarterAsync();
-            }
+            if (action == "本地导入 (TXT)") await ExecuteLocalImportAsync();
+            else if (action == "坚果云导入 (TXT)") await ExecuteCloudImportStarterAsync();
         }
 
         private async Task ExecuteLocalImportAsync()
@@ -184,39 +172,38 @@ namespace MonoRead.App.ViewModels
             try
             {
                 var result = await FilePicker.Default.PickAsync(new PickOptions { PickerTitle = "请选择TXT小说文件" });
-                if (result != null)
+                if (result == null) return;
+
+                if (!result.FileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!result.FileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                    {
-                        await Application.Current.MainPage!.DisplayAlert("格式错误", "MonoRead 目前仅支持导入 .txt 格式的纯文本小说。", "知道了");
-                        return;
-                    }
-
-                    IsBusy = true;
-                    BusyMessage = "极速拆解中...";
-                    await Task.Delay(50);
-
-                    var parsedBook = await Task.Run(async () =>
-                    {
-                        using var stream = await result.OpenReadAsync();
-                        string newFileName = $"{Guid.NewGuid()}.dat";
-                        string sandboxPath = await _fileSystemService.CopyFileToSandboxAsync(stream, newFileName);
-                        string fileHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
-                        return await _bookParsingUseCase.ParseAndSplitBookAsync(sandboxPath, result.FileName, fileHash);
-                    });
-
-                    if (CurrentFolder != null)
-                    {
-                        parsedBook.FolderId = CurrentFolder.Id;
-                        await _bookRepository.UpdateAsync(parsedBook);
-                    }
-
-                    MainThread.BeginInvokeOnMainThread(async () =>
-                    {
-                        LoadItemsCommand.Execute(null);
-                        await OpenItemAsync(new LibraryItemNode { IsFolder = false, OriginalEntity = parsedBook, ShowCheckBox = IsEditMode });
-                    });
+                    await Application.Current.MainPage!.DisplayAlert("格式错误", "MonoRead 目前仅支持导入 .txt 格式的纯文本小说。", "知道了");
+                    return;
                 }
+
+                IsBusy = true;
+                BusyMessage = "极速拆解中...";
+                await Task.Delay(50);
+
+                var parsedBook = await Task.Run(async () =>
+                {
+                    using var stream = await result.OpenReadAsync();
+                    string newFileName = $"{Guid.NewGuid()}.dat";
+                    string sandboxPath = await _fileSystemService.CopyFileToSandboxAsync(stream, newFileName);
+                    string fileHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
+                    return await _bookParsingUseCase.ParseAndSplitBookAsync(sandboxPath, result.FileName, fileHash);
+                });
+
+                if (CurrentFolder != null)
+                {
+                    parsedBook.FolderId = CurrentFolder.Id;
+                    await _bookRepository.UpdateAsync(parsedBook);
+                }
+
+                MainThread.BeginInvokeOnMainThread(async () =>
+                {
+                    LoadItemsCommand.Execute(null);
+                    await OpenItemAsync(new LibraryItemNode { IsFolder = false, OriginalEntity = parsedBook, ShowCheckBox = IsEditMode });
+                });
             }
             catch (Exception ex)
             {
@@ -234,7 +221,6 @@ namespace MonoRead.App.ViewModels
                 if (goConfig) await Shell.Current.GoToAsync("CloudBackupPage");
                 return;
             }
-
             await Shell.Current.GoToAsync("CloudFilePickerPage");
         }
 
@@ -250,16 +236,25 @@ namespace MonoRead.App.ViewModels
                 var user = await SecureStorage.Default.GetAsync("WebDav_User") ?? "";
                 var pass = await SecureStorage.Default.GetAsync("WebDav_Pass") ?? "";
 
-                string newFileName = $"{Guid.NewGuid()}.dat";
-                string sandboxPath = Path.Combine(FileSystem.AppDataDirectory, "Library", newFileName);
-                Directory.CreateDirectory(Path.GetDirectoryName(sandboxPath)!);
+                // 【核心修复 2】：绝对禁止在此处拼接绝对路径！先下到 Cache 目录
+                string tempFileName = $"{Guid.NewGuid()}.dat";
+                string tempFilePath = Path.Combine(FileSystem.CacheDirectory, tempFileName);
 
-                // 【修改点 4】：使用构造函数注入的服务调用下载，彻底消灭 Handler 报错
-                bool downloadSuccess = await _cloudStorageService.DownloadFileAsync(url, user, pass, remoteFilePath, sandboxPath);
+                bool downloadSuccess = await _cloudStorageService.DownloadFileAsync(url, user, pass, remoteFilePath, tempFilePath);
                 if (!downloadSuccess) throw new Exception("网络下载中断或失败。");
 
                 BusyMessage = "极速拆解小说章节中...";
                 await Task.Delay(50);
+
+                string sandboxPath;
+                // 将 Cache 中的文件，通过标准接口输送给 FileSystemService，让它来决定最终相对路径和存储位置
+                using (var tempStream = File.OpenRead(tempFilePath))
+                {
+                    sandboxPath = await _fileSystemService.CopyFileToSandboxAsync(tempStream, $"{Guid.NewGuid()}.dat");
+                }
+
+                // 阅后即焚，清理临时文件
+                if (File.Exists(tempFilePath)) File.Delete(tempFilePath);
 
                 string fileHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
                 var allBooks = await _bookRepository.GetAllBooksAsync();
@@ -267,8 +262,11 @@ namespace MonoRead.App.ViewModels
 
                 if (existingBook != null)
                 {
-                    File.Delete(sandboxPath);
-                    await Application.Current.MainPage!.DisplayAlert("提示", "该书籍已在书架中，无需重复导入。", "知道了");
+                    if (File.Exists(sandboxPath)) File.Delete(sandboxPath);
+                    MainThread.BeginInvokeOnMainThread(async () =>
+                    {
+                        await Application.Current.MainPage!.DisplayAlert("提示", "该书籍已在书架中，无需重复导入。", "知道了");
+                    });
                     return;
                 }
 
@@ -283,13 +281,20 @@ namespace MonoRead.App.ViewModels
                     await _bookRepository.UpdateAsync(parsedBook);
                 }
 
-                LoadItemsCommand.Execute(null);
-                await OpenItemAsync(new LibraryItemNode { IsFolder = false, OriginalEntity = parsedBook, ShowCheckBox = IsEditMode });
+                // 【核心修复 3】：从后台线程切回主线程进行 UI 刷新和路由导航，防止闪退与 CollectionView 崩溃
+                MainThread.BeginInvokeOnMainThread(async () =>
+                {
+                    LoadItemsCommand.Execute(null);
+                    await OpenItemAsync(new LibraryItemNode { IsFolder = false, OriginalEntity = parsedBook, ShowCheckBox = IsEditMode });
+                });
             }
             catch (Exception ex)
             {
                 LocalLogger.LogError($"云端导入异常: {ex.Message}");
-                await Application.Current.MainPage!.DisplayAlert("导入失败", $"云端下载或解析失败：{ex.Message}", "确定");
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    Application.Current.MainPage!.DisplayAlert("导入失败", $"云端下载或解析失败：{ex.Message}", "确定");
+                });
             }
             finally { IsBusy = false; }
         }
