@@ -46,7 +46,7 @@ MonoRead 是一款基于 .NET MAUI 构建的现代化跨平台阅读引擎，致
 ## 🚀 快速开始 (Getting Started)
 
 ### 环境要求
-- Visual Studio 2022 (17.12+) 或 Rider
+- Visual Studio 2026  或 Rider
 - .NET 10.0 SDK
 - MAUI 工作负载 (Android / iOS / Windows)
 
