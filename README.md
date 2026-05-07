@@ -24,11 +24,11 @@ MonoRead 是一款基于 .NET MAUI 构建的现代化跨平台阅读引擎，致
 
 ## 📸 屏幕截图 (Screenshots)
 
-> 💡 **Tip:** 将你的 App 运行截图放在这里（建议放 3 张：书架页、阅读排版页、笔记详情页）
+> 💡 **Tip:**  App 运行截图
 > 
 > | 极简书架 | 沉浸阅读 | 笔记管理 |
 > |:---:|:---:|:---:|
-> | <img src="screenshots/library.png" width="250"/> | <img src="screenshots/reader.png" width="250"/> | <img src="screenshots/notes.png" width="250"/> |
+> | <img src="screenshots/library.jpg" width="250"/> | <img src="screenshots/reader.jpg" width="250"/> | <img src="screenshots/notes.jpg" width="250"/> |
 
 ## 🛠️ 技术栈 (Tech Stack)
 
