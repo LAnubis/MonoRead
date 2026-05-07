@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
-  <!-- 1. 核心 Logo 图形 (清透蓝 #3A75B0) -->
+  <!-- 1. 核心 Logo 图形 (使用品牌色 #3A75B0) -->
   <g stroke="#3A75B0" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none">
     <path d="M120 155 C95 145 65 145 50 150 V55 C65 50 95 50 120 60 C145 50 175 50 190 55 V150 C175 145 145 145 120 155Z" />
     <!-- 居中书脊 -->
     <path d="M120 60 V155" />
   </g>
   
-  <!-- 2. 应用名称更新为 FableReader -->
-  <text x="120" y="210" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="600" fill="#3A75B0" text-anchor="middle" letter-spacing="3">FableReader</text>
+  <!-- 2. 应用名称 (极简无衬线体，增加字间距提升呼吸感) -->
+  <text x="120" y="210" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="600" fill="#3A75B0" text-anchor="middle" letter-spacing="4">MonoRead</text>
 </svg>

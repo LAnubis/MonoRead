@@ -39,8 +39,6 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
-		<ApplicationTitle>FableReader</ApplicationTitle>
-		<ApplicationId>com.fableshub.fablereader</ApplicationId>
 
 		<!-- 开启自动签名 -->
 		<AndroidKeyStore>True</AndroidKeyStore>
@@ -57,26 +55,26 @@
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-ios|AnyCPU'">
 	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
-	  <ApplicationTitle>FableReader</ApplicationTitle>
-	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <ApplicationTitle>MonoRead </ApplicationTitle>
+	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-maccatalyst|AnyCPU'">
 	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
-	  <ApplicationTitle>FableReader</ApplicationTitle>
-	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <ApplicationTitle>MonoRead </ApplicationTitle>
+	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-windows10.0.19041.0|AnyCPU'">
 	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
-	  <ApplicationTitle>FableReader</ApplicationTitle>
-	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <ApplicationTitle>MonoRead </ApplicationTitle>
+	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
 	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
-	  <ApplicationTitle>FableReader</ApplicationTitle>
-	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <ApplicationTitle>MonoRead </ApplicationTitle>
+	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	  <AndroidKeyStore>True</AndroidKeyStore>
 	  <AndroidSigningStorePass>381716</AndroidSigningStorePass>
 	  <AndroidSigningKeyAlias>monoread_alias</AndroidSigningKeyAlias>
@@ -86,26 +84,26 @@
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-ios|AnyCPU'">
 	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
-	  <ApplicationTitle>FableReader</ApplicationTitle>
-	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <ApplicationTitle>MonoRead </ApplicationTitle>
+	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-maccatalyst|AnyCPU'">
 	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
-	  <ApplicationTitle>FableReader</ApplicationTitle>
-	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <ApplicationTitle>MonoRead </ApplicationTitle>
+	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-windows10.0.19041.0|AnyCPU'">
 	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
-	  <ApplicationTitle>FableReader</ApplicationTitle>
-	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <ApplicationTitle>MonoRead </ApplicationTitle>
+	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-android|AnyCPU'">
 	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
-	  <ApplicationTitle>FableReader</ApplicationTitle>
-	  <ApplicationId>com.fableshub.fablereader</ApplicationId>
+	  <ApplicationTitle>MonoRead </ApplicationTitle>
+	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<ItemGroup>
