@@ -30,6 +30,11 @@ MonoRead 是一款基于 .NET MAUI 构建的现代化跨平台阅读引擎，致
 > |:---:|:---:|:---:|
 > | <img src="screenshots/library.jpg" width="250"/> | <img src="screenshots/reader.jpg" width="250"/> | <img src="screenshots/notes.jpg" width="250"/> |
 
+> 
+> | 笔记详情 | 设置画面 | 云端备份 |
+> |:---:|:---:|:---:|
+> | <img src="screenshots/nodedetail.jpg" width="250"/> | <img src="screenshots/setting.jpg" width="250"/> | <img src="screenshots/cloud.jpg" width="250"/> |
+
 ## 🛠️ 技术栈 (Tech Stack)
 
 - **框架**: [.NET 10 MAUI](https://learn.microsoft.com/en-us/dotnet/maui/)
