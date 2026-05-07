@@ -61,43 +61,44 @@ namespace MonoRead.App.ViewModels
         [RelayCommand]
         public async Task LoadRecentBooksAsync()
         {
-            // 防抖：如果正在加载且已经有数据，直接返回，防止切换 Tab 时引发页面闪烁
             if (IsBusy) return;
             IsBusy = true;
 
             try
             {
-                // =========================================================
-                // 【核心修复 1】：将所有的数据库拉取、过滤排序逻辑关进后台线程！
-                // 彻底释放主线程，让底部 Tab 切换动画恢复丝滑。
-                // =========================================================
                 var recentUiNodes = await Task.Run(async () =>
                 {
-                    var allBooks = await _bookRepository.GetAllBooksAsync();
-
-                    DateTime localTime = DateTime.UtcNow.ToLocalTime();
-                    var limitDate = localTime.AddDays(-3);
-
-                    var recent = allBooks
-                        .Where(b => !b.IsDeleted && b.UpdatedAt >= limitDate)
-                        .OrderByDescending(b => b.UpdatedAt)
-                        .Select(b => new RecentBookUiNode { OriginalBook = b }) // 穿上 UI 外衣
-                        .ToList();
-
-                    return recent;
-                });
-
-                // =========================================================
-                // 数据就绪后，切回主线程进行极速 UI 渲染
-                // =========================================================
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    RecentBooks.Clear();
-                    foreach (var node in recentUiNodes)
+                    // 【核心修复】：接入我们在书架定义的同一个交警（全局锁）
+                    await LibraryViewModel.GlobalDbLock.WaitAsync();
+                    try
                     {
-                        RecentBooks.Add(node);
+                        var allBooks = await _bookRepository.GetAllBooksAsync();
+
+                        DateTime localTime = DateTime.UtcNow.ToLocalTime();
+                        var limitDate = localTime.AddDays(-3);
+
+                        return allBooks
+                            .Where(b => !b.IsDeleted && b.UpdatedAt >= limitDate)
+                            .OrderByDescending(b => b.UpdatedAt)
+                            .Select(b => new RecentBookUiNode { OriginalBook = b })
+                            .ToList();
+                    }
+                    finally
+                    {
+                        LibraryViewModel.GlobalDbLock.Release();
                     }
                 });
+
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    // 【核心修复】：整体赋值替换！拒绝 Clear 和 Foreach Add 带来的 UI 撕裂和闪退
+                    RecentBooks = new ObservableCollection<RecentBookUiNode>(recentUiNodes);
+                });
+            }
+            catch (Exception ex)
+            {
+                // 吞掉异常防止 App 崩溃，打印日志备查
+                System.Diagnostics.Debug.WriteLine($"加载最近阅读失败: {ex.Message}");
             }
             finally
             {
