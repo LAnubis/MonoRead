@@ -54,48 +54,65 @@ namespace MonoRead.App.ViewModels
         }
         private async void LoadStatisticsAsync()
         {
-            // 获取过去 90 天的数据（适合手机横向显示）
-            var records = await _recordRepository.GetRecentRecordsAsync(90);
-
-            int totalSecs = 0;
-            int streak = 0;
-            DateTime today = DateTime.UtcNow.Date;
-
-            // 计算总时长和连续阅读天数
-            foreach (var r in records.OrderByDescending(x => x.RecordDate))
+            try
             {
-                totalSecs += r.DurationSeconds;
-                // 简单的连续打卡计算逻辑
-                if (r.RecordDate == today.AddDays(-streak) && r.DurationSeconds > 0)
-                    streak++;
+                // =========================================================
+                // 【核心防护】：把查库操作隔离出来并加锁
+                // =========================================================
+                var records = await Task.Run(async () =>
+                {
+                    await LibraryViewModel.GlobalDbLock.WaitAsync();
+                    try
+                    {
+                        return await _recordRepository.GetRecentRecordsAsync(90);
+                    }
+                    finally
+                    {
+                        LibraryViewModel.GlobalDbLock.Release();
+                    }
+                });
+
+                int totalSecs = 0;
+                int streak = 0;
+                DateTime today = DateTime.UtcNow.Date;
+
+                foreach (var r in records.OrderByDescending(x => x.RecordDate))
+                {
+                    totalSecs += r.DurationSeconds;
+                    if (r.RecordDate == today.AddDays(-streak) && r.DurationSeconds > 0)
+                        streak++;
+                }
+
+                TotalReadMinutes = totalSecs / 60;
+                ContinuousReadDays = streak;
+
+                var boxes = new List<HeatmapBox>();
+                for (int i = 89; i >= 0; i--)
+                {
+                    var targetDate = today.AddDays(-i);
+                    var record = records.FirstOrDefault(r => r.RecordDate == targetDate);
+                    int secs = record?.DurationSeconds ?? 0;
+                    int mins = secs / 60;
+
+                    string color = "#EBEDF0";
+                    if (mins > 0 && mins <= 15) color = "#9BE9A8";
+                    else if (mins > 15 && mins <= 45) color = "#40C463";
+                    else if (mins > 45 && mins <= 90) color = "#30A14E";
+                    else if (mins > 90) color = "#216E39";
+
+                    boxes.Add(new HeatmapBox { Date = targetDate, DurationSeconds = secs, ColorHex = color });
+                }
+
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    // 整体替换
+                    HeatBoxes = new ObservableCollection<HeatmapBox>(boxes);
+                });
             }
-
-            TotalReadMinutes = totalSecs / 60;
-            ContinuousReadDays = streak;
-
-            // 绘制热力图矩阵 (补齐 90 天的格子，没有记录的填灰色)
-            var boxes = new List<HeatmapBox>();
-            for (int i = 89; i >= 0; i--)
+            catch (Exception ex)
             {
-                var targetDate = today.AddDays(-i);
-                var record = records.FirstOrDefault(r => r.RecordDate == targetDate);
-                int secs = record?.DurationSeconds ?? 0;
-                int mins = secs / 60;
-
-                string color = "#EBEDF0"; // 0分钟: 灰色
-                if (mins > 0 && mins <= 15) color = "#9BE9A8"; // 浅绿
-                else if (mins > 15 && mins <= 45) color = "#40C463"; // 中绿
-                else if (mins > 45 && mins <= 90) color = "#30A14E"; // 深绿
-                else if (mins > 90) color = "#216E39"; // 墨绿 (大佬级别)
-
-                boxes.Add(new HeatmapBox { Date = targetDate, DurationSeconds = secs, ColorHex = color });
+                LocalLogger.LogError($"加载热力图异常: {ex.Message}");
             }
-
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                HeatBoxes.Clear();
-                foreach (var box in boxes) HeatBoxes.Add(box);
-            });
         }
 
         [RelayCommand]
@@ -163,7 +180,22 @@ namespace MonoRead.App.ViewModels
         {
             try
             {
-                var records = await _recordRepository.GetAllAsync();
+                // =========================================================
+                // 【核心防护】：查库操作加锁
+                // =========================================================
+                var records = await Task.Run(async () =>
+                {
+                    await LibraryViewModel.GlobalDbLock.WaitAsync();
+                    try
+                    {
+                        return await _recordRepository.GetAllAsync();
+                    }
+                    finally
+                    {
+                        LibraryViewModel.GlobalDbLock.Release();
+                    }
+                });
+
                 if (records != null && records.Any())
                 {
                     long totalSeconds = records.Sum(r => r.DurationSeconds);
@@ -176,8 +208,9 @@ namespace MonoRead.App.ViewModels
                         TotalReadDisplay = $"{minutes}分钟";
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                LocalLogger.LogError($"获取总阅读时长异常: {ex.Message}");
                 TotalReadDisplay = "获取失败";
             }
         }

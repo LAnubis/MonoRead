@@ -39,20 +39,36 @@ namespace MonoRead.App.ViewModels
             IsBusy = true;
             try
             {
-                var allNotes = await _noteRepository.GetAllNotDeletedAsync();
-
-                var grouped = allNotes.GroupBy(n => n.BookId).Select(g => new BookNoteSummary
+                // 将极其耗时的查询和林克表达式关进后台线程
+                var grouped = await Task.Run(async () =>
                 {
-                    BookId = g.Key,
-                    BookTitle = g.Key == null ? "未分类(孤儿)笔记" : (g.FirstOrDefault()?.BookTitle ?? "未知书籍"),
-                    NoteCount = g.Count(),
-                    LatestNoteTime = g.Max(n => n.CreatedAt)
-                }).OrderByDescending(s => s.LatestNoteTime).ToList();
+                    // =========================================================
+                    // 【核心防护】：乖乖排队！等书架或其他人查完，再放行
+                    // =========================================================
+                    await LibraryViewModel.GlobalDbLock.WaitAsync();
+                    try
+                    {
+                        var allNotes = await _noteRepository.GetAllNotDeletedAsync();
+
+                        return allNotes.GroupBy(n => n.BookId).Select(g => new BookNoteSummary
+                        {
+                            BookId = g.Key,
+                            BookTitle = g.Key == null ? "未分类(孤儿)笔记" : (g.FirstOrDefault()?.BookTitle ?? "未知书籍"),
+                            NoteCount = g.Count(),
+                            LatestNoteTime = g.Max(n => n.CreatedAt)
+                        }).OrderByDescending(s => s.LatestNoteTime).ToList();
+                    }
+                    finally
+                    {
+                        // 查完千万记得还回去，不然整个 App 就卡死了
+                        LibraryViewModel.GlobalDbLock.Release();
+                    }
+                });
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    NotedBooks.Clear();
-                    foreach (var item in grouped) NotedBooks.Add(item);
+                    // 使用整体替换大法，防止 CollectionView 渲染闪退
+                    NotedBooks = new ObservableCollection<BookNoteSummary>(grouped);
                 });
             }
             catch (Exception ex)

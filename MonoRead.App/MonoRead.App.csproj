@@ -54,25 +54,25 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-ios|AnyCPU'">
-	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.2</ApplicationDisplayVersion>
 	  <ApplicationTitle>MonoRead </ApplicationTitle>
 	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-maccatalyst|AnyCPU'">
-	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.2</ApplicationDisplayVersion>
 	  <ApplicationTitle>MonoRead </ApplicationTitle>
 	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-windows10.0.19041.0|AnyCPU'">
-	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.2</ApplicationDisplayVersion>
 	  <ApplicationTitle>MonoRead </ApplicationTitle>
 	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
-	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.2</ApplicationDisplayVersion>
 	  <ApplicationTitle>MonoRead </ApplicationTitle>
 	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	  <AndroidKeyStore>True</AndroidKeyStore>
@@ -83,25 +83,25 @@
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-ios|AnyCPU'">
-	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.2</ApplicationDisplayVersion>
 	  <ApplicationTitle>MonoRead </ApplicationTitle>
 	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-maccatalyst|AnyCPU'">
-	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.2</ApplicationDisplayVersion>
 	  <ApplicationTitle>MonoRead </ApplicationTitle>
 	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-windows10.0.19041.0|AnyCPU'">
-	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.2</ApplicationDisplayVersion>
 	  <ApplicationTitle>MonoRead </ApplicationTitle>
 	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0-android|AnyCPU'">
-	  <ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
+	  <ApplicationDisplayVersion>2.1.2</ApplicationDisplayVersion>
 	  <ApplicationTitle>MonoRead </ApplicationTitle>
 	  <ApplicationId>com.fableshub.MonoRead</ApplicationId>
 	</PropertyGroup>
