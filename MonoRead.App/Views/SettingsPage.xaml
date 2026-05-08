@@ -52,7 +52,23 @@
                 <Label Text="数据与系统" FontSize="13" TextColor="#999999" Margin="20,0,0,8" />
                 <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,25">
 
-                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto">
+                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto" BackgroundColor="Transparent">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding GoToBookSourceManagerCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0" Text="🌐" FontSize="20" VerticalOptions="Center" Margin="0,0,15,0"/>
+
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
+                            <Label Text="网络书源管理" FontSize="16" TextColor="#333333" />
+                            <Label Text="配置解析规则，扩展全网搜索" FontSize="12" TextColor="#999999" />
+                        </VerticalStackLayout>
+
+                        <Label Grid.Column="2" Text="〉" FontSize="14" TextColor="#CCCCCC" VerticalOptions="Center" />
+                    </Grid>
+
+                    <BoxView HeightRequest="1" Color="#F7F7F7" Margin="55,0,0,0" />
+
+                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto" BackgroundColor="Transparent">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding GoToTrashCommand}" />
                         </Grid.GestureRecognizers>
@@ -63,7 +79,7 @@
 
                     <BoxView HeightRequest="1" Color="#F7F7F7" Margin="55,0,0,0" />
 
-                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto">
+                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto" BackgroundColor="Transparent">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding GoToCloudBackupCommand}" />
                         </Grid.GestureRecognizers>
@@ -74,7 +90,7 @@
 
                     <BoxView HeightRequest="1" Color="#F7F7F7" Margin="55,0,0,0" />
 
-                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto">
+                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto" BackgroundColor="Transparent">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding ExportLogCommand}" />
                         </Grid.GestureRecognizers>

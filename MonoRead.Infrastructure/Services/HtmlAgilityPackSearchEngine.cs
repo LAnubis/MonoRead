@@ -1,0 +1,383 @@
+﻿using HtmlAgilityPack;
+using Microsoft.Extensions.Logging;
+using MonoRead.Core.Entities;
+using MonoRead.Core.Interfaces;
+using MonoRead.Infrastructure.Logging;
+using System.Text;
+using System.Web;
+
+namespace MonoRead.Infrastructure.Services
+{
+    public class HtmlAgilityPackSearchEngine : IBookSearchEngine
+    {
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<HtmlAgilityPackSearchEngine> _logger;
+
+        public HtmlAgilityPackSearchEngine(ILogger<HtmlAgilityPackSearchEngine> logger)
+        {
+            _logger = logger;
+
+            var handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate | System.Net.DecompressionMethods.Brotli
+            };
+            _httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+
+            _httpClient.DefaultRequestHeaders.Clear();
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Upgrade-Insecure-Requests", "1");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Sec-Fetch-Dest", "document");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Sec-Fetch-Mode", "navigate");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Sec-Fetch-Site", "none");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Sec-Fetch-User", "?1");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Connection", "keep-alive");
+
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        }
+
+        public async Task<List<Book>> SearchBooksAsync(BookSourceRuleModel rule, string keyword)
+        {
+            var resultList = new List<Book>();
+            string targetUrl = string.Empty;
+
+            try
+            {
+                string charset = string.IsNullOrWhiteSpace(rule.Charset) ? "utf-8" : rule.Charset.ToLower();
+                Encoding encoding = Encoding.GetEncoding(charset == "gbk" ? "gbk" : "utf-8");
+
+                string encodedKeyword = HttpUtility.UrlEncode(keyword, encoding);
+                string fullSearchStr = rule.SearchUrl.Replace("{key}", encodedKeyword);
+
+                HttpResponseMessage response;
+
+                if (fullSearchStr.Contains('|'))
+                {
+                    var parts = fullSearchStr.Split('|');
+                    targetUrl = parts[0];
+                    string postBody = parts[1];
+
+                    var request = new HttpRequestMessage(HttpMethod.Post, targetUrl);
+                    request.Content = new StringContent(postBody, encoding, "application/x-www-form-urlencoded");
+                    request.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
+                    request.Headers.TryAddWithoutValidation("Origin", rule.BaseUrl.TrimEnd('/'));
+
+                    response = await _httpClient.SendAsync(request);
+
+                    int statusCode = (int)response.StatusCode;
+                    if (statusCode == 301 || statusCode == 302 || statusCode == 307 || statusCode == 308)
+                    {
+                        var redirectUrl = response.Headers.Location?.ToString();
+                        if (!string.IsNullOrEmpty(redirectUrl))
+                        {
+                            if (!redirectUrl.StartsWith("http"))
+                                redirectUrl = new Uri(new Uri(targetUrl), redirectUrl).ToString();
+
+                            LocalLogger.LogInfo($"[引擎侦测] 检测到 69书吧 伪装重定向！目标转移至: {redirectUrl}");
+                            targetUrl = redirectUrl;
+
+                            var redirectReq = new HttpRequestMessage(HttpMethod.Post, redirectUrl);
+                            redirectReq.Content = new StringContent(postBody, encoding, "application/x-www-form-urlencoded");
+                            redirectReq.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
+                            redirectReq.Headers.TryAddWithoutValidation("Origin", rule.BaseUrl.TrimEnd('/'));
+
+                            response = await _httpClient.SendAsync(redirectReq);
+                        }
+                    }
+                }
+                else
+                {
+                    targetUrl = fullSearchStr;
+                    var request = new HttpRequestMessage(HttpMethod.Get, targetUrl);
+                    request.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
+                    response = await _httpClient.SendAsync(request);
+
+                    int statusCode = (int)response.StatusCode;
+                    if (statusCode == 301 || statusCode == 302 || statusCode == 307 || statusCode == 308)
+                    {
+                        var redirectUrl = response.Headers.Location?.ToString();
+                        if (!string.IsNullOrEmpty(redirectUrl))
+                        {
+                            if (!redirectUrl.StartsWith("http"))
+                                redirectUrl = new Uri(new Uri(targetUrl), redirectUrl).ToString();
+
+                            targetUrl = redirectUrl;
+                            var redirectReq = new HttpRequestMessage(HttpMethod.Get, redirectUrl);
+                            redirectReq.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
+                            response = await _httpClient.SendAsync(redirectReq);
+                        }
+                    }
+                }
+
+                response.EnsureSuccessStatusCode();
+
+                var htmlBytes = await response.Content.ReadAsByteArrayAsync();
+                string html = encoding.GetString(htmlBytes).Trim();
+                LocalLogger.LogInfo("抓取到的源码 (前2000字): \n" + (html.Length > 2000 ? html.Substring(0, 2000) : html));
+
+                // =========================================================
+                // 【双模态引擎】：JSON 格式拦截解析
+                // =========================================================
+                if (html.StartsWith("[") || html.StartsWith("{"))
+                {
+                    try
+                    {
+                        using var jsonDoc = System.Text.Json.JsonDocument.Parse(html);
+                        var root = jsonDoc.RootElement;
+
+                        System.Text.Json.JsonElement listElement = root;
+                        if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            if (root.TryGetProperty("data", out var dataProp)) listElement = dataProp;
+                            else if (root.TryGetProperty("list", out var listProp)) listElement = listProp;
+                        }
+
+                        if (listElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var item in listElement.EnumerateArray())
+                            {
+                                var book = new Book
+                                {
+                                    Id = Guid.NewGuid(),
+                                    Title = GetJsonValue(item, rule.RuleSearch.Name),
+                                    Author = GetJsonValue(item, rule.RuleSearch.Author),
+                                    CoverUrl = FormatUrl(rule.BaseUrl, GetJsonValue(item, rule.RuleSearch.CoverUrl)),
+                                    FileHash = FormatUrl(rule.BaseUrl, GetJsonValue(item, rule.RuleSearch.DetailUrl)),
+                                    Description = GetJsonValue(item, rule.RuleSearch.Description),
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                if (!string.IsNullOrWhiteSpace(book.Title)) resultList.Add(book);
+                            }
+                        }
+                        return resultList;
+                    }
+                    catch (Exception jsonEx)
+                    {
+                        LocalLogger.LogError("JSON 引擎解析失败", jsonEx);
+                    }
+                }
+
+                // =========================================================
+                // HTML 格式传统解析
+                // =========================================================
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+                // 【新增防御机制】：如果网站返回了乱码或 "1" 导致跌落到 HTML 解析，
+                // 但我们的规则是纯 JSON 规则（XPath为空），直接拦截，防止 XPathException 崩溃！
+                if (string.IsNullOrWhiteSpace(rule.RuleSearch.BookList))
+                {
+                    LocalLogger.LogError($"网站未返回有效 JSON，且当前规则未配置 HTML XPath，判定为无搜索结果 | 返回内容: {html}");
+                    return resultList;
+                }
+                var nodes = doc.DocumentNode.SelectNodes(rule.RuleSearch.BookList);
+
+                if (nodes == null || nodes.Count == 0)
+                {
+                    LocalLogger.LogError($"引擎未找到节点 | 书源:{rule.SourceName} | XPath: {rule.RuleSearch.BookList} | 可能是网站改版或无结果");
+                    return resultList;
+                }
+
+                foreach (var node in nodes)
+                {
+                    string name = ExtractText(node, rule.RuleSearch.Name);
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+
+                    var book = new Book
+                    {
+                        Id = Guid.NewGuid(),
+                        Title = name,
+                        Author = ExtractText(node, rule.RuleSearch.Author),
+                        CoverUrl = FormatUrl(rule.BaseUrl, ExtractAttribute(node, rule.RuleSearch.CoverUrl)),
+                        FileHash = FormatUrl(rule.BaseUrl, ExtractAttribute(node, rule.RuleSearch.DetailUrl)),
+                        Description = ExtractText(node, rule.RuleSearch.Description),
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    resultList.Add(book);
+                }
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"【搜书引擎底盘崩溃】 | 书源:{rule.SourceName} | XPath: {rule.RuleSearch.BookList} | 关键词: {keyword} | 尝试访问: {targetUrl} |", ex);
+
+                resultList.Add(new Book
+                {
+                    Id = Guid.NewGuid(),
+                    Title = "⚠️ 引擎底层报错 (已写入日志)",
+                    Author = "请导出日志查看",
+                    Description = $"【死因】：{ex.Message}",
+                    CoverUrl = ""
+                });
+            }
+
+            return resultList;
+        }
+
+        private string GetJsonValue(System.Text.Json.JsonElement element, string key)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return "";
+
+            string cleanKey = key.Replace(".//", "").Replace("//", "").Replace("/text()", "").Replace("/@src", "").Replace("/@href", "").Trim();
+
+            if (element.TryGetProperty(cleanKey, out var prop))
+            {
+                return prop.ValueKind == System.Text.Json.JsonValueKind.String ? prop.GetString() : prop.GetRawText();
+            }
+            return "";
+        }
+
+        public async Task<string> GetDownloadUrlAsync(RuleDetail rule, string detailUrl)
+        {
+            try
+            {
+                var response = await _httpClient.GetStringAsync(detailUrl);
+                var doc = new HtmlDocument();
+                doc.LoadHtml(response);
+
+                var downloadUrl = ExtractAttribute(doc.DocumentNode, rule.TxtDownloadUrl);
+                return downloadUrl;
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError("【提取下载链接失败】", ex);
+                return string.Empty;
+            }
+        }
+
+        private string ExtractText(HtmlNode contextNode, string xpath)
+        {
+            if (string.IsNullOrWhiteSpace(xpath)) return "未知";
+            var node = contextNode.SelectSingleNode(xpath);
+            return node != null ? HttpUtility.HtmlDecode(node.InnerText.Trim()) : "未知";
+        }
+
+        private string ExtractAttribute(HtmlNode contextNode, string xpath)
+        {
+            if (string.IsNullOrWhiteSpace(xpath)) return string.Empty;
+            if (xpath.Contains("/@"))
+            {
+                var parts = xpath.Split("/@");
+                var nodeXpath = parts[0];
+                var attrName = parts[1];
+
+                var node = contextNode.SelectSingleNode(nodeXpath);
+                return node != null ? node.GetAttributeValue(attrName, string.Empty).Trim() : string.Empty;
+            }
+            return string.Empty;
+        }
+
+        private string FormatUrl(string baseUrl, string relativeUrl)
+        {
+            if (string.IsNullOrWhiteSpace(relativeUrl)) return string.Empty;
+
+            if (relativeUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                return relativeUrl;
+
+            if (relativeUrl.StartsWith("//"))
+                return "https:" + relativeUrl;
+
+            return baseUrl.TrimEnd('/') + "/" + relativeUrl.TrimStart('/');
+        }
+
+        public async Task<List<Chapter>> GetTocAsync(BookSourceRuleModel rule, string detailUrl)
+        {
+            var chapterList = new List<Chapter>();
+            try
+            {
+                LocalLogger.LogInfo($"开始抓取目录 | 目标: {detailUrl}");
+
+                string targetUrl = FormatUrl(rule.BaseUrl, detailUrl);
+                var request = new HttpRequestMessage(HttpMethod.Get, targetUrl);
+                request.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var htmlBytes = await response.Content.ReadAsByteArrayAsync();
+
+                string charset = string.IsNullOrWhiteSpace(rule.Charset) ? "utf-8" : rule.Charset.ToLower();
+                Encoding encoding = Encoding.GetEncoding(charset == "gbk" ? "gbk" : "utf-8");
+                string html = encoding.GetString(htmlBytes);
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                var nodes = doc.DocumentNode.SelectNodes(rule.RuleToc.ChapterList);
+                if (nodes == null || nodes.Count == 0)
+                {
+                    LocalLogger.LogError($"未找到目录节点 | XPath: {rule.RuleToc.ChapterList}");
+                    return chapterList;
+                }
+
+                foreach (var node in nodes)
+                {
+                    string title = ExtractText(node, rule.RuleToc.ChapterName);
+                    string url = ExtractAttribute(node, rule.RuleToc.ChapterUrl);
+
+                    if (!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(url))
+                    {
+                        chapterList.Add(new Chapter
+                        {
+                            Title = title,
+                            Url = FormatUrl(rule.BaseUrl, url)
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"【目录抓取崩溃】 | 目标: {detailUrl}", ex);
+            }
+            return chapterList;
+        }
+
+        public async Task<string> GetChapterContentAsync(BookSourceRuleModel rule, string chapterUrl)
+        {
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, chapterUrl);
+                request.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var htmlBytes = await response.Content.ReadAsByteArrayAsync();
+                string charset = string.IsNullOrWhiteSpace(rule.Charset) ? "utf-8" : rule.Charset.ToLower();
+                Encoding encoding = Encoding.GetEncoding(charset == "gbk" ? "gbk" : "utf-8");
+                string html = encoding.GetString(htmlBytes);
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                var contentNode = doc.DocumentNode.SelectSingleNode(rule.RuleContent.Content);
+                if (contentNode == null)
+                {
+                    LocalLogger.LogError($"未找到正文节点 | XPath: {rule.RuleContent.Content} | URL: {chapterUrl}");
+                    return "章节内容加载失败或网站改版，请检查规则。";
+                }
+
+                string innerHtml = contentNode.InnerHtml;
+                innerHtml = innerHtml.Replace("<br>", "\n").Replace("<br/>", "\n").Replace("<br />", "\n");
+                innerHtml = innerHtml.Replace("</p>", "\n").Replace("<p>", "");
+
+                var cleanDoc = new HtmlDocument();
+                cleanDoc.LoadHtml(innerHtml);
+                string pureText = cleanDoc.DocumentNode.InnerText;
+
+                pureText = HttpUtility.HtmlDecode(pureText);
+
+                var lines = pureText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                var formattedLines = lines.Select(l => "　　" + l.Trim()).Where(l => l.Length > 2);
+
+                return string.Join("\n\n", formattedLines);
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"【正文抓取崩溃】 | URL: {chapterUrl}", ex);
+                return "网络异常，获取内容失败。";
+            }
+        }
+    }
+}

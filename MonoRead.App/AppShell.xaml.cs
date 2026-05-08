@@ -18,7 +18,8 @@ namespace MonoRead.App
             Routing.RegisterRoute("CloudBackupPage", typeof(Views.CloudBackupPage));
             Routing.RegisterRoute("CloudFilePickerPage", typeof(Views.CloudFilePickerPage));
             Routing.RegisterRoute(nameof(ReadingStatsPage), typeof(ReadingStatsPage));
-
+            Routing.RegisterRoute(nameof(BookSourceManagementPage), typeof(BookSourceManagementPage));
+            Routing.RegisterRoute("WebSearchPage", typeof(WebSearchPage));
         }
     }
 }

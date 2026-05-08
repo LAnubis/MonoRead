@@ -93,7 +93,18 @@ namespace MonoRead.App
 
             builder.Services.AddTransient<ReadingStatsViewModel>();
             builder.Services.AddTransient<ReadingStatsPage>();
+            // 注册 Repository
+            builder.Services.AddSingleton<IBookSourceRepository, BookSourceRepository>();
 
+            // 注册书源管理的 ViewModel 和 Page
+            builder.Services.AddTransient<BookSourceManagementViewModel>();
+            builder.Services.AddTransient<BookSourceManagementPage>();
+
+            // 告诉 App：当你需要 IBookSearchEngine 时，请给我一个 HtmlAgilityPackSearchEngine
+            builder.Services.AddSingleton<IBookSearchEngine, HtmlAgilityPackSearchEngine>();
+
+            builder.Services.AddTransient<WebSearchViewModel>();
+            builder.Services.AddTransient<Views.WebSearchPage>();
             var app = builder.Build();
             using (var scope = app.Services.CreateScope())
             {

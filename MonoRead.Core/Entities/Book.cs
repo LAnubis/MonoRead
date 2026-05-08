@@ -12,6 +12,16 @@ namespace MonoRead.Core.Entities
     {
         public Guid? FolderId { get; set; }
         public string Title { get; set; } = string.Empty;
+
+
+        // =========================================================
+        // 【新增】：为了承接网络书源而扩展的元数据字段
+        // =========================================================
+        public string Author { get; set; } = "未知";
+        public string Description { get; set; } = string.Empty;
+        public string CoverUrl { get; set; } = string.Empty; // 存储网络图片的直链
+
+
         public string FilePath { get; set; } = string.Empty;
         public string? CoverImagePath { get; set; }
         public string FileHash { get; set; } = string.Empty;

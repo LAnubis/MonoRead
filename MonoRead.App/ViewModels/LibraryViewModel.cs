@@ -192,11 +192,14 @@ namespace MonoRead.App.ViewModels
         {
             if (IsBusy) return;
 
+            // 【核心新增】：加上“全网搜书”的选项
             string action = await Shell.Current.DisplayActionSheetAsync(
-                "选择导入方式", "取消", null, "本地导入 (TXT)", "坚果云导入 (TXT)");
+                "选择获取书籍的方式", "取消", null, "全网搜书 (网络书源)", "本地导入 (TXT)", "坚果云导入 (TXT)");
 
             if (action == "本地导入 (TXT)") await ExecuteLocalImportAsync();
             else if (action == "坚果云导入 (TXT)") await ExecuteCloudImportStarterAsync();
+            // 点击全网搜书，跳转到专属的搜索页面
+            else if (action == "全网搜书 (网络书源)") await Shell.Current.GoToAsync("WebSearchPage");
         }
 
         private async Task ExecuteLocalImportAsync()
