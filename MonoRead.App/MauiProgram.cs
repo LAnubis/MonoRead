@@ -106,6 +106,9 @@ namespace MonoRead.App
             builder.Services.AddTransient<WebSearchViewModel>();
             builder.Services.AddTransient<Views.WebSearchPage>();
             var app = builder.Build();
+
+            // 注册全局字符集提供程序，防止 GBK 编码的小说网站导致系统底层崩溃
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
             using (var scope = app.Services.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();

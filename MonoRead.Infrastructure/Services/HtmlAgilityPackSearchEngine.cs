@@ -235,22 +235,69 @@ namespace MonoRead.Infrastructure.Services
             return "";
         }
 
-        public async Task<string> GetDownloadUrlAsync(RuleDetail rule, string detailUrl)
+        // =========================================================
+        // 引擎能力扩展 3：从详情页提取真实的 TXT 下载地址 (支持 JS 动态链接拦截)
+        // =========================================================
+        public async Task<string> GetDownloadUrlAsync(RuleDetail ruleDetail, string detailUrl)
         {
             try
             {
-                var response = await _httpClient.GetStringAsync(detailUrl);
-                var doc = new HtmlDocument();
-                doc.LoadHtml(response);
+                // 1. 防爬虫伪装请求详情页
+                var request = new HttpRequestMessage(HttpMethod.Get, detailUrl);
+                request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
 
-                var downloadUrl = ExtractAttribute(doc.DocumentNode, rule.TxtDownloadUrl);
-                return downloadUrl;
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var htmlBytes = await response.Content.ReadAsByteArrayAsync();
+                string html = System.Text.Encoding.UTF8.GetString(htmlBytes);
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                string xpath = ruleDetail?.TxtDownloadUrl;
+                if (string.IsNullOrWhiteSpace(xpath))
+                {
+                    xpath = "//a[contains(text(), 'Txt格式下载') or contains(text(), 'TXT下载')]/@href";
+                }
+
+                string rawUrl = string.Empty;
+                var node = doc.DocumentNode.SelectSingleNode(xpath);
+                if (node != null)
+                {
+                    rawUrl = node.GetAttributeValue("href", "");
+                }
+
+                // =========================================================
+                // 【核心究极进化】：如果 XPath 找不到，说明遭遇了 JS 动态渲染防御！
+                // 直接启动正则引擎，全页面扫描拦截类似 get_down_url(..., 'http://...txt') 的代码
+                // =========================================================
+                if (string.IsNullOrWhiteSpace(rawUrl))
+                {
+                    // 匹配 get_down_url(..., 'URL.txt', ...) 中的 URL
+                    var regex = new System.Text.RegularExpressions.Regex(@"get_down_url\([^,]+,\s*['""]([^'""]+\.txt)['""]");
+                    var match = regex.Match(html);
+                    if (match.Success)
+                    {
+                        rawUrl = match.Groups[1].Value;
+                        LocalLogger.LogInfo($"触发正则引擎：成功拦截 JS 动态生成的 TXT 链接: {rawUrl}");
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(rawUrl))
+                {
+                    // 处理可能存在的相对路径问题
+                    string absoluteUrl = rawUrl.StartsWith("http") ? rawUrl : new Uri(new Uri(detailUrl), rawUrl).ToString();
+
+                    // 【核心修复】：解决中文文件名下载崩溃的问题！
+                    return Uri.EscapeUriString(absoluteUrl);
+                }
             }
             catch (Exception ex)
             {
-                LocalLogger.LogError("【提取下载链接失败】", ex);
-                return string.Empty;
+                LocalLogger.LogError($"抓取 TXT 下载地址失败: {detailUrl}", ex);
             }
+            return string.Empty;
         }
 
         private string ExtractText(HtmlNode contextNode, string xpath)
@@ -289,18 +336,26 @@ namespace MonoRead.Infrastructure.Services
         }
 
         // =========================================================
-        // 引擎能力扩展 1：拉取小说全本目录
+        // 引擎能力扩展 1：拉取小说全本目录 (自带智能跃迁 + 顶级伪装防封)
         // =========================================================
         public async Task<List<ChapterNode>> GetTocAsync(BookSourceRuleModel rule, string tocUrl)
         {
             var chapters = new List<ChapterNode>();
             try
             {
+                // 【终极防御】：强制在此处注册 GBK 解码器，彻底斩杀 Parameter 'provider' 闪退 Bug！
+                System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
                 string charset = string.IsNullOrWhiteSpace(rule.Charset) ? "utf-8" : rule.Charset.ToLower();
                 Encoding encoding = Encoding.GetEncoding(charset == "gbk" ? "gbk" : "utf-8");
 
+                // 定义一套极其逼真的浏览器指纹
+                string fakeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
                 var request = new HttpRequestMessage(HttpMethod.Get, tocUrl);
                 request.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
+                request.Headers.Add("User-Agent", fakeUserAgent);
+
                 var response = await _httpClient.SendAsync(request);
                 response.EnsureSuccessStatusCode();
 
@@ -310,6 +365,37 @@ namespace MonoRead.Infrastructure.Services
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
 
+                // =========================================================
+                // 智能目录跃迁 (Smart Hop)
+                // =========================================================
+                var readOnlineNode = doc.DocumentNode.SelectSingleNode("//a[contains(text(), '在线阅读') or contains(text(), '点击阅读') or contains(text(), '开始阅读')]");
+                if (readOnlineNode != null)
+                {
+                    string nextHref = readOnlineNode.GetAttributeValue("href", "");
+                    if (!string.IsNullOrWhiteSpace(nextHref) && nextHref != "#" && !nextHref.ToLower().StartsWith("javascript"))
+                    {
+                        string realTocUrl = nextHref.StartsWith("http") ? nextHref : new Uri(new Uri(tocUrl), nextHref).ToString();
+                        LocalLogger.LogInfo($"触发智能跃迁：从详情页跳转至真实目录页 {realTocUrl}");
+
+                        // 【核心修复】：为第二次跃迁请求穿上完整的顶级伪装服，骗过 502 防火墙！
+                        var nextRequest = new HttpRequestMessage(HttpMethod.Get, realTocUrl);
+                        nextRequest.Headers.Add("Referer", tocUrl);
+                        nextRequest.Headers.Add("User-Agent", fakeUserAgent);
+
+                        var nextResponse = await _httpClient.SendAsync(nextRequest);
+                        nextResponse.EnsureSuccessStatusCode();
+
+                        var nextHtmlBytes = await nextResponse.Content.ReadAsByteArrayAsync();
+                        html = encoding.GetString(nextHtmlBytes);
+                        doc.LoadHtml(html);
+
+                        tocUrl = realTocUrl;
+                    }
+                }
+
+                // =========================================================
+                // 提取目录链接
+                // =========================================================
                 var nodes = doc.DocumentNode.SelectNodes(rule.RuleToc.ChapterList);
                 if (nodes == null || nodes.Count == 0)
                 {
@@ -324,7 +410,6 @@ namespace MonoRead.Infrastructure.Services
 
                     if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(rawUrl)) continue;
 
-                    // 【核心架构】：智能处理相对路径 (比如 /html/123.html) 变为绝对路径
                     string absoluteUrl = rawUrl.StartsWith("http") ? rawUrl : new Uri(new Uri(tocUrl), rawUrl).ToString();
 
                     chapters.Add(new ChapterNode
@@ -340,7 +425,6 @@ namespace MonoRead.Infrastructure.Services
             }
             return chapters;
         }
-
         // =========================================================
         // 引擎能力扩展 2：拉取并净化小说单章正文
         // =========================================================

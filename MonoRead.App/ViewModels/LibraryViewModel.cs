@@ -87,10 +87,6 @@ namespace MonoRead.App.ViewModels
 
         public static readonly System.Threading.SemaphoreSlim GlobalDbLock = new(1, 1);
 
-        // =========================================================
-        // 【核心修复 1】：剥离出一个无视 IsBusy 锁的底层核心刷新器
-        // 并且采用 Clear() + Add() 保证 MAUI 视图绝对不丢失渲染
-        // =========================================================
         private async Task RefreshItemsCoreAsync()
         {
             var nodes = await Task.Run(async () =>
@@ -114,7 +110,7 @@ namespace MonoRead.App.ViewModels
 
                     foreach (var b in currentLevelBooks)
                     {
-                        bool isCloud = b.FilePath == "ONLINE_BOOK";
+                        bool isCloud = b.FilePath == "ONLINE_GHOST";
 
                         tempList.Add(new LibraryItemNode
                         {
@@ -140,7 +136,6 @@ namespace MonoRead.App.ViewModels
 
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                // 用清空和追加的方式，彻底治愈 MAUI 画面不更新的绝症
                 Items.Clear();
                 foreach (var node in nodes)
                 {
@@ -218,7 +213,7 @@ namespace MonoRead.App.ViewModels
         }
 
         // =========================================================
-        // 【核心修复 2】：去掉了此处的 if(IsBusy) 掐断逻辑！
+        // 【防雷终结版】：搭载了智能降级与防盗链终极破解的极速下载管线
         // =========================================================
         private async Task DownloadCloudBookToLocalAsync(Book book)
         {
@@ -227,78 +222,97 @@ namespace MonoRead.App.ViewModels
                 var rule = JsonSerializer.Deserialize<BookSourceRuleModel>(book.ProgressLocator);
                 string detailUrl = book.FileHash;
 
-                BusyMessage = "正在获取全本目录...";
-                var chapters = await _searchEngine.GetTocAsync(rule, detailUrl);
-                if (chapters == null || !chapters.Any()) throw new Exception("目录拉取失败，可能是网站改版。");
+                BusyMessage = "正在解析TXT真实下载地址...";
 
-                int total = chapters.Count;
-                var fullContent = new StringBuilder();
-                fullContent.AppendLine(book.Title);
-                fullContent.AppendLine($"作者：{book.Author}");
-                fullContent.AppendLine("---------------------------");
+                // 1. 获取TXT链接
+                string txtUrl = await _searchEngine.GetDownloadUrlAsync(rule.RuleDetail, detailUrl);
 
-                int completed = 0;
-                var results = new (int Index, string Title, string Content)[total];
+                if (string.IsNullOrWhiteSpace(txtUrl))
+                    throw new Exception("无法在网页中找到合法的 TXT 下载链接，网站可能不支持全本下载。");
 
-                int batchSize = 5;
-                for (int i = 0; i < total; i += batchSize)
+                // 【绝杀 1：消除双重编码问题】将之前引擎里 Escape 过的字符串还原，让 HttpRequestMessage 去安全处理
+                txtUrl = Uri.UnescapeDataString(txtUrl);
+
+                BusyMessage = "正在极速下载全本文档...";
+
+                using var handler = new HttpClientHandler
                 {
-                    var batch = chapters.Skip(i).Take(batchSize).Select((c, idx) => new { Chapter = c, Index = i + idx }).ToList();
+                    AllowAutoRedirect = true,
+                    UseCookies = true,
+                    AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
+                };
+                using var httpClient = new HttpClient(handler);
 
-                    var tasks = batch.Select(async item =>
+                // 【绝杀 2：使用原生态 Uri 对象】
+                var request = new HttpRequestMessage(HttpMethod.Get, new Uri(txtUrl));
+
+                // 【绝杀 3：降级到 HTTP/1.1】很多老破小服务器不支持 HTTP/2 会报 403
+                request.Version = new Version(1, 1);
+
+                request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+
+                // 用它主站的根域名来骗过防盗链
+                var baseUri = new Uri(detailUrl);
+                request.Headers.Add("Referer", $"{baseUri.Scheme}://{baseUri.Host}/");
+                request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+                request.Headers.Add("Accept-Encoding", "gzip, deflate");
+
+                var response = await httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    // 【绝杀 4：智能兜底 (迅雷模式)】如果带 Referer 被拒绝 (403)，尝试无 Referer 下载！
+                    if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
                     {
-                        try
-                        {
-                            string content = await _searchEngine.GetChapterContentAsync(rule, item.Chapter.Url);
-                            results[item.Index] = (item.Index, item.Chapter.Title, content);
-                        }
-                        catch (Exception)
-                        {
-                            results[item.Index] = (item.Index, item.Chapter.Title, "【网络异常，本章内容下载失败】");
-                        }
-                    });
+                        LocalLogger.LogError("带 Referer 下载被 403 拦截，尝试触发无 Referer 的纯净迅雷模式...");
 
-                    await Task.WhenAll(tasks);
-                    completed += batch.Count;
+                        var fallbackRequest = new HttpRequestMessage(HttpMethod.Get, new Uri(txtUrl));
+                        fallbackRequest.Version = new Version(1, 1);
+                        fallbackRequest.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                        // 这一次什么花里胡哨的头都不带了，伪装成无情的下载器！
+                        response = await httpClient.SendAsync(fallbackRequest);
+                    }
 
-                    MainThread.BeginInvokeOnMainThread(() =>
-                        BusyMessage = $"正在极速爬取 ({completed}/{total})\n请勿切换页面...");
+                    // 如果还是失败，抛出真实异常
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"服务器拒绝了下载 (错误码: {(int)response.StatusCode})。这通常是由于网站的深度防盗链机制拦截。");
+                    }
                 }
 
-                BusyMessage = "正在组装全本文档...";
-                foreach (var res in results.OrderBy(r => r.Index))
+                var fileBytes = await response.Content.ReadAsByteArrayAsync();
+
+                // 【安全校验】：如果下载下来的文件极小（不到1KB），说明下到的根本不是小说，而是网页防火墙的报错HTML代码
+                if (fileBytes.Length < 1024)
                 {
-                    fullContent.AppendLine($"\n\n{res.Title}\n");
-                    fullContent.AppendLine(res.Content);
+                    string errorText = System.Text.Encoding.UTF8.GetString(fileBytes);
+                    LocalLogger.LogError($"下载数据过小，可能被防火墙拦截。内容: {errorText}");
+                    throw new Exception("下载失败：文件数据异常，网站可能返回了拦截页面而不是真正的书籍文件。");
                 }
 
-                string tempFileName = $"{Guid.NewGuid()}.txt";
-                string tempFilePath = Path.Combine(FileSystem.CacheDirectory, tempFileName);
-                await File.WriteAllTextAsync(tempFilePath, fullContent.ToString(), Encoding.UTF8);
+                using var stream = new MemoryStream(fileBytes);
 
-                BusyMessage = "正在进行本地化分片入库...";
-                string sandboxPath;
-                using (var tempStream = File.OpenRead(tempFilePath))
-                {
-                    sandboxPath = await _fileSystemService.CopyFileToSandboxAsync(tempStream, $"{Guid.NewGuid()}.dat");
-                }
-                if (File.Exists(tempFilePath)) File.Delete(tempFilePath);
+                BusyMessage = "正在本地极速拆解并生成目录...";
 
-                string fileHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
+                string newFileName = $"{Guid.NewGuid()}.dat";
+                string sandboxPath = await _fileSystemService.CopyFileToSandboxAsync(stream, newFileName);
+                string trueHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
+
                 var parsedBook = await Task.Run(async () =>
-                    await _bookParsingUseCase.ParseAndSplitBookAsync(sandboxPath, book.Title + ".txt", fileHash));
+                    await _bookParsingUseCase.ParseAndSplitBookAsync(sandboxPath, book.Title + ".txt", trueHash));
 
                 parsedBook.FolderId = book.FolderId;
                 parsedBook.Author = book.Author;
                 parsedBook.Description = book.Description;
                 parsedBook.CoverUrl = book.CoverUrl;
 
+                // 清理占位书壳子
                 try { book.IsDeleted = true; await _bookRepository.UpdateAsync(book); } catch { }
                 await _bookRepository.ArchiveBookSafelyAsync(book.Id, false);
 
-                await _bookRepository.UpdateAsync(parsedBook);
+                // 将拆解好的新书连带章节一起 Insert 落库！
+                await _bookRepository.SaveBookWithChaptersAsync(parsedBook, parsedBook.Chapters);
 
-                // 更新UI并且跳转
                 await RefreshItemsCoreAsync();
 
                 MainThread.BeginInvokeOnMainThread(async () =>
@@ -309,8 +323,8 @@ namespace MonoRead.App.ViewModels
             }
             catch (Exception ex)
             {
-                LocalLogger.LogError($"全本离线失败: {ex.Message}", ex);
-                MainThread.BeginInvokeOnMainThread(() => Shell.Current.DisplayAlert("下载失败", $"网络不稳定：\n{ex.Message}", "知道了"));
+                LocalLogger.LogError($"TXT极速下载失败: {ex.Message}", ex);
+                MainThread.BeginInvokeOnMainThread(() => Shell.Current.DisplayAlert("下载失败", ex.Message, "知道了"));
             }
         }
 
@@ -383,7 +397,6 @@ namespace MonoRead.App.ViewModels
                     }
                 }
 
-                // 强制刷新并弹窗
                 await RefreshItemsCoreAsync();
 
                 MainThread.BeginInvokeOnMainThread(async () =>

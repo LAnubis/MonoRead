@@ -68,43 +68,29 @@ namespace MonoRead.App.ViewModels
                             allResults.AddRange(books);
                         }
                     }
-                    catch { /* 忽略单个书源的崩溃 */ }
+                    catch { /* 忽略单个书源故障 */ }
                 }
 
-                if (!allResults.Any())
-                {
-                    await Shell.Current.DisplayAlert("无结果", "各大书源均未检索到相关书籍，请更换关键词或添加新书源。", "确定");
-                }
-                else
-                {
-                    foreach (var book in allResults) SearchResults.Add(book);
-                }
+                if (!allResults.Any()) await Shell.Current.DisplayAlert("无结果", "未检索到相关书籍。", "确定");
+                else foreach (var book in allResults) SearchResults.Add(book);
             }
             finally { IsBusy = false; }
         }
 
-        // 【核心 V2 逻辑】：在线流媒体书籍入库
+        // =========================================================
+        // 【核心优化】：瞬间加入书架，不抓取章节
+        // =========================================================
         [RelayCommand]
         private async Task DownloadBookAsync(Book book)
         {
             if (book == null || IsBusy) return;
 
             IsBusy = true;
-            BusyMessage = "正在秒级获取全本目录...";
+            BusyMessage = "正在加入书架...";
 
             try
             {
-                var rule = JsonSerializer.Deserialize<BookSourceRuleModel>(book.ProgressLocator);
-                string detailUrl = book.FileHash;
-
-                var chapters = await _searchEngine.GetTocAsync(rule, detailUrl);
-                if (chapters == null || !chapters.Any())
-                {
-                    await Shell.Current.DisplayAlert("添加失败", "无法获取书籍目录，可能是书源规则失效或网站改版。", "知道了");
-                    return;
-                }
-
-                BusyMessage = "正在将书籍入库...";
+                string detailUrl = book.FileHash; // 搜索时详情页URL临时存放在此
 
                 var existingBooks = await _bookRepository.GetAllBooksAsync();
                 if (existingBooks.Any(b => b.FileHash == detailUrl))
@@ -113,6 +99,7 @@ namespace MonoRead.App.ViewModels
                     return;
                 }
 
+                // 建立云端占位书 (幽灵书)
                 var newBook = new Book
                 {
                     Id = Guid.NewGuid(),
@@ -121,34 +108,20 @@ namespace MonoRead.App.ViewModels
                     Description = book.Description,
                     CoverUrl = book.CoverUrl,
                     FileHash = detailUrl,
-                    FilePath = "ONLINE_BOOK", // 【暗号：这是一本云端流媒体书】
+                    FilePath = "ONLINE_GHOST", // 暗号：表示这是一个待下载的云端占位符
                     ProgressLocator = book.ProgressLocator,
                     CreatedAt = DateTime.UtcNow
                 };
 
-                var bookChapters = new List<BookChapter>();
-                int sort = 0;
-                foreach (var c in chapters)
-                {
-                    bookChapters.Add(new BookChapter
-                    {
-                        Id = Guid.NewGuid(),
-                        BookId = newBook.Id,
-                        Title = c.Title,
-                        SortOrder = sort++,
-                        StartLocator = c.Url // 【暗号：存入真实网页URL】
-                    });
-                }
+                // 【修复 CS7036】：补上第二个参数，传入一个空的章节列表
+                await _bookRepository.SaveBookWithChaptersAsync(newBook, new List<BookChapter>());
 
-                // 调用你的完美方法连书带章节一起插入
-                await _bookRepository.SaveBookWithChaptersAsync(newBook, bookChapters);
-
-                await Shell.Current.DisplayAlert("添加成功", $"《{newBook.Title}》已成功加入书架！共拉取 {bookChapters.Count} 章。", "太棒了");
+                await Shell.Current.DisplayAlert("添加成功", $"《{newBook.Title}》已加入书架！\n点击书架上的封面即可开始全本极速下载。", "太棒了");
                 await Shell.Current.GoToAsync("..");
             }
             catch (Exception ex)
             {
-                await Shell.Current.DisplayAlert("添加失败", $"处理过程中发生错误: {ex.Message}", "确定");
+                await Shell.Current.DisplayAlert("添加失败", ex.Message, "确定");
             }
             finally { IsBusy = false; }
         }
