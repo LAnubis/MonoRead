@@ -52,12 +52,18 @@ namespace MonoRead.Infrastructure.Services
                 string fullSearchStr = rule.SearchUrl.Replace("{key}", encodedKeyword);
 
                 HttpResponseMessage response;
+                string postBody = string.Empty;
+                bool isPost = false;
 
+                // =========================================================
+                // 第一阶段：发送初始请求
+                // =========================================================
                 if (fullSearchStr.Contains('|'))
                 {
                     var parts = fullSearchStr.Split('|');
                     targetUrl = parts[0];
-                    string postBody = parts[1];
+                    postBody = parts[1];
+                    isPost = true;
 
                     var request = new HttpRequestMessage(HttpMethod.Post, targetUrl);
                     request.Content = new StringContent(postBody, encoding, "application/x-www-form-urlencoded");
@@ -65,27 +71,6 @@ namespace MonoRead.Infrastructure.Services
                     request.Headers.TryAddWithoutValidation("Origin", rule.BaseUrl.TrimEnd('/'));
 
                     response = await _httpClient.SendAsync(request);
-
-                    int statusCode = (int)response.StatusCode;
-                    if (statusCode == 301 || statusCode == 302 || statusCode == 307 || statusCode == 308)
-                    {
-                        var redirectUrl = response.Headers.Location?.ToString();
-                        if (!string.IsNullOrEmpty(redirectUrl))
-                        {
-                            if (!redirectUrl.StartsWith("http"))
-                                redirectUrl = new Uri(new Uri(targetUrl), redirectUrl).ToString();
-
-                            LocalLogger.LogInfo($"[引擎侦测] 检测到 69书吧 伪装重定向！目标转移至: {redirectUrl}");
-                            targetUrl = redirectUrl;
-
-                            var redirectReq = new HttpRequestMessage(HttpMethod.Post, redirectUrl);
-                            redirectReq.Content = new StringContent(postBody, encoding, "application/x-www-form-urlencoded");
-                            redirectReq.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
-                            redirectReq.Headers.TryAddWithoutValidation("Origin", rule.BaseUrl.TrimEnd('/'));
-
-                            response = await _httpClient.SendAsync(redirectReq);
-                        }
-                    }
                 }
                 else
                 {
@@ -93,17 +78,36 @@ namespace MonoRead.Infrastructure.Services
                     var request = new HttpRequestMessage(HttpMethod.Get, targetUrl);
                     request.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
                     response = await _httpClient.SendAsync(request);
+                }
 
-                    int statusCode = (int)response.StatusCode;
-                    if (statusCode == 301 || statusCode == 302 || statusCode == 307 || statusCode == 308)
+                // =========================================================
+                // 第二阶段：【架构师终极防御】统一智能重定向拦截
+                // =========================================================
+                int statusCode = (int)response.StatusCode;
+                if (statusCode == 301 || statusCode == 302 || statusCode == 303 || statusCode == 307 || statusCode == 308)
+                {
+                    var redirectUrl = response.Headers.Location?.ToString();
+                    if (!string.IsNullOrEmpty(redirectUrl))
                     {
-                        var redirectUrl = response.Headers.Location?.ToString();
-                        if (!string.IsNullOrEmpty(redirectUrl))
-                        {
-                            if (!redirectUrl.StartsWith("http"))
-                                redirectUrl = new Uri(new Uri(targetUrl), redirectUrl).ToString();
+                        if (!redirectUrl.StartsWith("http"))
+                            redirectUrl = new Uri(new Uri(targetUrl), redirectUrl).ToString();
 
-                            targetUrl = redirectUrl;
+                        LocalLogger.LogInfo($"[引擎侦测] 检测到智能重定向！目标转移至: {redirectUrl}");
+                        targetUrl = redirectUrl;
+
+                        // 【核心智能换挡】：结合了国际规范和爬虫实战经验
+                        if ((statusCode == 307 || statusCode == 308) && isPost)
+                        {
+                            // 307/308 且原本是 POST：强制保持 POST 阵型追杀 (对付 69书吧)
+                            var redirectReq = new HttpRequestMessage(HttpMethod.Post, redirectUrl);
+                            redirectReq.Content = new StringContent(postBody, encoding, "application/x-www-form-urlencoded");
+                            redirectReq.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
+                            redirectReq.Headers.TryAddWithoutValidation("Origin", rule.BaseUrl.TrimEnd('/'));
+                            response = await _httpClient.SendAsync(redirectReq);
+                        }
+                        else
+                        {
+                            // 301/302/303：无论之前是啥，立刻降级为纯净的 GET 请求 (对付 呱树阁 PRG 模式)
                             var redirectReq = new HttpRequestMessage(HttpMethod.Get, redirectUrl);
                             redirectReq.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
                             response = await _httpClient.SendAsync(redirectReq);
@@ -111,6 +115,7 @@ namespace MonoRead.Infrastructure.Services
                     }
                 }
 
+                // 第三阶段：校验最终状态并获取数据
                 response.EnsureSuccessStatusCode();
 
                 var htmlBytes = await response.Content.ReadAsByteArrayAsync();
@@ -164,6 +169,7 @@ namespace MonoRead.Infrastructure.Services
                 // =========================================================
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
+
                 // 【新增防御机制】：如果网站返回了乱码或 "1" 导致跌落到 HTML 解析，
                 // 但我们的规则是纯 JSON 规则（XPath为空），直接拦截，防止 XPathException 崩溃！
                 if (string.IsNullOrWhiteSpace(rule.RuleSearch.BookList))
@@ -171,6 +177,7 @@ namespace MonoRead.Infrastructure.Services
                     LocalLogger.LogError($"网站未返回有效 JSON，且当前规则未配置 HTML XPath，判定为无搜索结果 | 返回内容: {html}");
                     return resultList;
                 }
+
                 var nodes = doc.DocumentNode.SelectNodes(rule.RuleSearch.BookList);
 
                 if (nodes == null || nodes.Count == 0)
@@ -202,14 +209,14 @@ namespace MonoRead.Infrastructure.Services
             {
                 LocalLogger.LogError($"【搜书引擎底盘崩溃】 | 书源:{rule.SourceName} | XPath: {rule.RuleSearch.BookList} | 关键词: {keyword} | 尝试访问: {targetUrl} |", ex);
 
-                resultList.Add(new Book
-                {
-                    Id = Guid.NewGuid(),
-                    Title = "⚠️ 引擎底层报错 (已写入日志)",
-                    Author = "请导出日志查看",
-                    Description = $"【死因】：{ex.Message}",
-                    CoverUrl = ""
-                });
+                //resultList.Add(new Book
+                //{
+                //    Id = Guid.NewGuid(),
+                //    Title = "⚠️ 引擎底层报错 (已写入日志)",
+                //    Author = "请导出日志查看",
+                //    Description = $"【死因】：{ex.Message}",
+                //    CoverUrl = ""
+                //});
             }
 
             return resultList;
