@@ -45,7 +45,6 @@ namespace MonoRead.App.ViewModels
 
             try
             {
-                // 1. 获取所有已启用的书源
                 var sources = await _sourceRepository.GetAllAsync();
                 var activeSources = sources.Where(s => s.IsEnabled).ToList();
 
@@ -55,7 +54,6 @@ namespace MonoRead.App.ViewModels
                     return;
                 }
 
-                // 2. 遍历书源进行搜索 (这里为了稳妥采用顺序检索，未来可以升级为 Task.WhenAll 并发检索)
                 var allResults = new List<Book>();
                 foreach (var source in activeSources)
                 {
@@ -66,7 +64,6 @@ namespace MonoRead.App.ViewModels
                         if (rule != null)
                         {
                             var books = await _searchEngine.SearchBooksAsync(rule, SearchKeyword);
-                            // 把书源的规则偷偷塞在 ProgressLocator 里，方便下载时用
                             foreach (var b in books) b.ProgressLocator = source.RulesJson;
                             allResults.AddRange(books);
                         }
@@ -80,77 +77,78 @@ namespace MonoRead.App.ViewModels
                 }
                 else
                 {
-                    // 将结果推送到 UI
                     foreach (var book in allResults) SearchResults.Add(book);
                 }
             }
             finally { IsBusy = false; }
         }
 
+        // 【核心 V2 逻辑】：在线流媒体书籍入库
         [RelayCommand]
         private async Task DownloadBookAsync(Book book)
         {
             if (book == null || IsBusy) return;
 
             IsBusy = true;
-            BusyMessage = "正在解析真实下载地址...";
+            BusyMessage = "正在秒级获取全本目录...";
 
             try
             {
                 var rule = JsonSerializer.Deserialize<BookSourceRuleModel>(book.ProgressLocator);
-                // 注意：我们在搜索时，把详情页的链接临时存在了 FileHash 字段里
                 string detailUrl = book.FileHash;
 
-                // 1. 获取 TXT 真实下载链接
-                string txtUrl = await _searchEngine.GetDownloadUrlAsync(rule.RuleDetail, detailUrl);
-                if (string.IsNullOrWhiteSpace(txtUrl))
+                var chapters = await _searchEngine.GetTocAsync(rule, detailUrl);
+                if (chapters == null || !chapters.Any())
                 {
-                    await Shell.Current.DisplayAlert("下载失败", "无法从网页中提取到有效的 TXT 下载链接，可能是规则失效或网站改版。", "知道了");
+                    await Shell.Current.DisplayAlert("添加失败", "无法获取书籍目录，可能是书源规则失效或网站改版。", "知道了");
                     return;
                 }
 
-                BusyMessage = "正在极速下载 TXT 文件...";
+                BusyMessage = "正在将书籍入库...";
 
-                // 2. 下载文件流
-                using var httpClient = new HttpClient();
-                var fileBytes = await httpClient.GetByteArrayAsync(txtUrl);
-                using var stream = new MemoryStream(fileBytes);
-
-                BusyMessage = "正在拆解章节并入库...";
-
-                // 3. 接入 MonoRead 的核心拆解管线！
-                string newFileName = $"{Guid.NewGuid()}.dat";
-                string sandboxPath = await _fileSystemService.CopyFileToSandboxAsync(stream, newFileName);
-                string trueHash = await _fileSystemService.CalculateFileHashAsync(sandboxPath);
-
-                // 查重保护
                 var existingBooks = await _bookRepository.GetAllBooksAsync();
-                if (existingBooks.Any(b => b.FileHash == trueHash))
+                if (existingBooks.Any(b => b.FileHash == detailUrl))
                 {
-                    if (File.Exists(sandboxPath)) File.Delete(sandboxPath);
-                    await Shell.Current.DisplayAlert("提示", "书架中已存在相同内容的小说！", "知道了");
+                    await Shell.Current.DisplayAlert("提示", "书架中已存在相同的小说！", "知道了");
                     return;
                 }
 
-                // 执行极速拆解
-                var parsedBook = await Task.Run(async () =>
-                    await _bookParsingUseCase.ParseAndSplitBookAsync(sandboxPath, book.Title + ".txt", trueHash));
+                var newBook = new Book
+                {
+                    Id = Guid.NewGuid(),
+                    Title = book.Title,
+                    Author = book.Author,
+                    Description = book.Description,
+                    CoverUrl = book.CoverUrl,
+                    FileHash = detailUrl,
+                    FilePath = "ONLINE_BOOK", // 【暗号：这是一本云端流媒体书】
+                    ProgressLocator = book.ProgressLocator,
+                    CreatedAt = DateTime.UtcNow
+                };
 
-                // 把抓取到的网络数据补全给拆解后的实体
-                parsedBook.Author = book.Author;
-                parsedBook.Description = book.Description;
-                parsedBook.CoverUrl = book.CoverUrl; // 注入灵魂封面！
+                var bookChapters = new List<BookChapter>();
+                int sort = 0;
+                foreach (var c in chapters)
+                {
+                    bookChapters.Add(new BookChapter
+                    {
+                        Id = Guid.NewGuid(),
+                        BookId = newBook.Id,
+                        Title = c.Title,
+                        SortOrder = sort++,
+                        StartLocator = c.Url // 【暗号：存入真实网页URL】
+                    });
+                }
 
-                await _bookRepository.UpdateAsync(parsedBook);
+                // 调用你的完美方法连书带章节一起插入
+                await _bookRepository.SaveBookWithChaptersAsync(newBook, bookChapters);
 
-                await Shell.Current.DisplayAlert("下载成功", $"《{parsedBook.Title}》已成功加入书架！", "太棒了");
-
-                // 下载成功后自动返回书架
+                await Shell.Current.DisplayAlert("添加成功", $"《{newBook.Title}》已成功加入书架！共拉取 {bookChapters.Count} 章。", "太棒了");
                 await Shell.Current.GoToAsync("..");
             }
             catch (Exception ex)
             {
-                await Shell.Current.DisplayAlert("处理失败", $"下载或拆解过程中发生错误: {ex.Message}", "确定");
+                await Shell.Current.DisplayAlert("添加失败", $"处理过程中发生错误: {ex.Message}", "确定");
             }
             finally { IsBusy = false; }
         }

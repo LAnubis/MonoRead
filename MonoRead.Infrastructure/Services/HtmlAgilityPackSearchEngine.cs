@@ -288,24 +288,23 @@ namespace MonoRead.Infrastructure.Services
             return baseUrl.TrimEnd('/') + "/" + relativeUrl.TrimStart('/');
         }
 
-        public async Task<List<Chapter>> GetTocAsync(BookSourceRuleModel rule, string detailUrl)
+        // =========================================================
+        // 引擎能力扩展 1：拉取小说全本目录
+        // =========================================================
+        public async Task<List<ChapterNode>> GetTocAsync(BookSourceRuleModel rule, string tocUrl)
         {
-            var chapterList = new List<Chapter>();
+            var chapters = new List<ChapterNode>();
             try
             {
-                LocalLogger.LogInfo($"开始抓取目录 | 目标: {detailUrl}");
+                string charset = string.IsNullOrWhiteSpace(rule.Charset) ? "utf-8" : rule.Charset.ToLower();
+                Encoding encoding = Encoding.GetEncoding(charset == "gbk" ? "gbk" : "utf-8");
 
-                string targetUrl = FormatUrl(rule.BaseUrl, detailUrl);
-                var request = new HttpRequestMessage(HttpMethod.Get, targetUrl);
+                var request = new HttpRequestMessage(HttpMethod.Get, tocUrl);
                 request.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
-
                 var response = await _httpClient.SendAsync(request);
                 response.EnsureSuccessStatusCode();
 
                 var htmlBytes = await response.Content.ReadAsByteArrayAsync();
-
-                string charset = string.IsNullOrWhiteSpace(rule.Charset) ? "utf-8" : rule.Charset.ToLower();
-                Encoding encoding = Encoding.GetEncoding(charset == "gbk" ? "gbk" : "utf-8");
                 string html = encoding.GetString(htmlBytes);
 
                 var doc = new HtmlDocument();
@@ -314,77 +313,86 @@ namespace MonoRead.Infrastructure.Services
                 var nodes = doc.DocumentNode.SelectNodes(rule.RuleToc.ChapterList);
                 if (nodes == null || nodes.Count == 0)
                 {
-                    LocalLogger.LogError($"未找到目录节点 | XPath: {rule.RuleToc.ChapterList}");
-                    return chapterList;
+                    LocalLogger.LogError($"引擎未能抓取到目录节点，XPath: {rule.RuleToc.ChapterList}");
+                    return chapters;
                 }
 
                 foreach (var node in nodes)
                 {
-                    string title = ExtractText(node, rule.RuleToc.ChapterName);
-                    string url = ExtractAttribute(node, rule.RuleToc.ChapterUrl);
+                    string name = ExtractText(node, rule.RuleToc.ChapterName);
+                    string rawUrl = ExtractAttribute(node, rule.RuleToc.ChapterUrl);
 
-                    if (!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(url))
+                    if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(rawUrl)) continue;
+
+                    // 【核心架构】：智能处理相对路径 (比如 /html/123.html) 变为绝对路径
+                    string absoluteUrl = rawUrl.StartsWith("http") ? rawUrl : new Uri(new Uri(tocUrl), rawUrl).ToString();
+
+                    chapters.Add(new ChapterNode
                     {
-                        chapterList.Add(new Chapter
-                        {
-                            Title = title,
-                            Url = FormatUrl(rule.BaseUrl, url)
-                        });
-                    }
+                        Title = name,
+                        Url = absoluteUrl
+                    });
                 }
             }
             catch (Exception ex)
             {
-                LocalLogger.LogError($"【目录抓取崩溃】 | 目标: {detailUrl}", ex);
+                LocalLogger.LogError($"拉取目录失败: {tocUrl}", ex);
             }
-            return chapterList;
+            return chapters;
         }
 
+        // =========================================================
+        // 引擎能力扩展 2：拉取并净化小说单章正文
+        // =========================================================
         public async Task<string> GetChapterContentAsync(BookSourceRuleModel rule, string chapterUrl)
         {
             try
             {
+                string charset = string.IsNullOrWhiteSpace(rule.Charset) ? "utf-8" : rule.Charset.ToLower();
+                Encoding encoding = Encoding.GetEncoding(charset == "gbk" ? "gbk" : "utf-8");
+
                 var request = new HttpRequestMessage(HttpMethod.Get, chapterUrl);
                 request.Headers.Add("Referer", rule.BaseUrl.TrimEnd('/') + "/");
-
                 var response = await _httpClient.SendAsync(request);
                 response.EnsureSuccessStatusCode();
 
                 var htmlBytes = await response.Content.ReadAsByteArrayAsync();
-                string charset = string.IsNullOrWhiteSpace(rule.Charset) ? "utf-8" : rule.Charset.ToLower();
-                Encoding encoding = Encoding.GetEncoding(charset == "gbk" ? "gbk" : "utf-8");
                 string html = encoding.GetString(htmlBytes);
 
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
 
-                var contentNode = doc.DocumentNode.SelectSingleNode(rule.RuleContent.Content);
-                if (contentNode == null)
+                var node = doc.DocumentNode.SelectSingleNode(rule.RuleContent.Content);
+                if (node != null)
                 {
-                    LocalLogger.LogError($"未找到正文节点 | XPath: {rule.RuleContent.Content} | URL: {chapterUrl}");
-                    return "章节内容加载失败或网站改版，请检查规则。";
+                    // 【极速排版引擎】：将无序的 HTML 标签 (<br>, <p>) 转化为纯文本换行
+                    string htmlContent = node.InnerHtml;
+                    htmlContent = htmlContent.Replace("<br>", "\n")
+                                           .Replace("<br/>", "\n")
+                                           .Replace("<br />", "\n")
+                                           .Replace("</p>", "\n")
+                                           .Replace("<p>", "");
+
+                    // 用替身 Document 进行剥离，防止污染原树
+                    var tempDoc = new HtmlDocument();
+                    tempDoc.LoadHtml(htmlContent);
+
+                    // 获取纯文本并解码 (将 &nbsp; 变回空格)
+                    string rawText = System.Net.WebUtility.HtmlDecode(tempDoc.DocumentNode.InnerText);
+
+                    // 清洗脏数据：剔除多余的连续换行和行首尾空白
+                    var lines = rawText.Split('\n')
+                                       .Select(l => l.Trim())
+                                       .Where(l => !string.IsNullOrWhiteSpace(l));
+
+                    return string.Join("\n\n", lines);
                 }
-
-                string innerHtml = contentNode.InnerHtml;
-                innerHtml = innerHtml.Replace("<br>", "\n").Replace("<br/>", "\n").Replace("<br />", "\n");
-                innerHtml = innerHtml.Replace("</p>", "\n").Replace("<p>", "");
-
-                var cleanDoc = new HtmlDocument();
-                cleanDoc.LoadHtml(innerHtml);
-                string pureText = cleanDoc.DocumentNode.InnerText;
-
-                pureText = HttpUtility.HtmlDecode(pureText);
-
-                var lines = pureText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                var formattedLines = lines.Select(l => "　　" + l.Trim()).Where(l => l.Length > 2);
-
-                return string.Join("\n\n", formattedLines);
             }
             catch (Exception ex)
             {
-                LocalLogger.LogError($"【正文抓取崩溃】 | URL: {chapterUrl}", ex);
-                return "网络异常，获取内容失败。";
+                LocalLogger.LogError($"拉取正文失败: {chapterUrl}", ex);
             }
+            return "【正文拉取失败，请检查网络或源规则】";
         }
     }
 }

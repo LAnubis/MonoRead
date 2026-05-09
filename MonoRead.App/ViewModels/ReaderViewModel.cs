@@ -82,7 +82,10 @@ namespace MonoRead.App.ViewModels
 
         private DateTime _lastToggleTime = DateTime.MinValue;
 
-        public ReaderViewModel(IBookRepository bookRepository, IBookNoteRepository noteRepository, IReadingRecordRepository recordRepository)
+        public ReaderViewModel(
+            IBookRepository bookRepository,
+            IBookNoteRepository noteRepository,
+            IReadingRecordRepository recordRepository)
         {
             _bookRepository = bookRepository;
             _noteRepository = noteRepository;
@@ -213,6 +216,9 @@ namespace MonoRead.App.ViewModels
             catch (Exception ex) { LocalLogger.LogError($"书籍加载失败: {ex.Message}"); }
         }
 
+        // =========================================================================
+        // 【纯净版架构】：去掉了在线流媒体判断，完全复用你原汁原味的沙盒读取逻辑！
+        // =========================================================================
         private async Task<string> ExtractChapterContentAsync(BookChapter chapter)
         {
             if (CurrentBook == null) return string.Empty;
@@ -222,22 +228,30 @@ namespace MonoRead.App.ViewModels
                 long startCharIndex = 0;
                 if (!string.IsNullOrWhiteSpace(chapter.StartLocator) && chapter.StartLocator != "{}")
                 {
-                    using var doc = System.Text.Json.JsonDocument.Parse(chapter.StartLocator);
-                    startCharIndex = doc.RootElement.GetProperty("position").GetInt64();
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(chapter.StartLocator);
+                        startCharIndex = doc.RootElement.GetProperty("position").GetInt64();
+                    }
+                    catch { startCharIndex = 0; }
                 }
 
                 var nextChapter = CurrentBook.Chapters.FirstOrDefault(c => c.SortOrder == chapter.SortOrder + 1);
                 long endCharIndex = long.MaxValue;
                 if (nextChapter != null && !string.IsNullOrWhiteSpace(nextChapter.StartLocator) && nextChapter.StartLocator != "{}")
                 {
-                    using var doc = System.Text.Json.JsonDocument.Parse(nextChapter.StartLocator);
-                    endCharIndex = doc.RootElement.GetProperty("position").GetInt64();
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(nextChapter.StartLocator);
+                        endCharIndex = doc.RootElement.GetProperty("position").GetInt64();
+                    }
+                    catch { endCharIndex = long.MaxValue; }
                 }
 
                 string fileName = Path.GetFileName(CurrentBook.FilePath);
                 string actualDevicePath = Path.Combine(Microsoft.Maui.Storage.FileSystem.AppDataDirectory, fileName);
 
-                if (!File.Exists(actualDevicePath)) return "【文件缺失】未能找到该书籍的本地源文件。";
+                if (!File.Exists(actualDevicePath)) return "【文件缺失】未能找到该书籍的本地源文件，请检查数据完整性。";
 
                 int lengthToRead = endCharIndex == long.MaxValue ? 20000 : (int)(endCharIndex - startCharIndex);
                 if (lengthToRead <= 0) return "（本章暂无正文内容）";
@@ -345,55 +359,38 @@ namespace MonoRead.App.ViewModels
                     }
                     else
                     {
-                        // =====================================================================
-                        // 【终极重构】：2D 空间行数估算模型 (动态填充 99% 的屏幕空间)
-                        // =====================================================================
                         var newPagedStream = new ObservableCollection<ReaderPageUiModel>();
-
-                        // 根据字号计算缩放率，基准字号假定为 18
                         double fontRatio = 18.0 / ReaderFontSize;
-
-                        // 估算当前手机屏幕一行能放多少字 (字号越大，单行字数越少)
                         int charsPerLine = (int)Math.Max(10, 20 * fontRatio);
-
-                        // 估算一屏高度最多能容纳多少行正文 (结合目前绝大多数全面屏手机的高度)
                         double maxLinesPerPage = Math.Max(15, 29 * fontRatio);
 
                         string currentPageContent = "";
-                        double currentPageLines = 0; // 记录当前页已占据的行高
+                        double currentPageLines = 0;
                         int pageIndex = 1;
 
                         foreach (var p in rawParagraphs)
                         {
-                            // 测算这一个段落需要跨越几行 (向上取整)
                             int paragraphLines = (int)Math.Ceiling((double)p.Length / charsPerLine);
-
-                            // 每个段落下方有 Spacing="15" 的物理留白，大约相当于额外 0.8 行的高度
                             double totalParagraphCost = paragraphLines + 0.8;
 
-                            // 判断装载这个段落后，会不会爆开屏幕容量
                             if (currentPageLines + totalParagraphCost > maxLinesPerPage && currentPageLines > 0)
                             {
-                                // 当前页装满了，立刻封口生成新页
                                 var uiPage = new ReaderPageUiModel { ChapterId = targetChapter.Id, Title = targetChapter.Title };
                                 foreach (var prp in currentPageContent.TrimEnd('\n').Split('\n'))
                                     uiPage.Paragraphs.Add(new ParagraphUiModel { RawText = prp, FormattedText = BuildFormattedParagraph(prp, chapterNotes) });
                                 newPagedStream.Add(uiPage);
 
-                                // 清空篮子，把这个段落放进下一页的开头
                                 currentPageContent = p + "\n";
                                 currentPageLines = totalParagraphCost;
                                 pageIndex++;
                             }
                             else
                             {
-                                // 还没满，继续往当前页里塞
                                 currentPageContent += p + "\n";
                                 currentPageLines += totalParagraphCost;
                             }
                         }
 
-                        // 收尾最后一页的残余文字
                         if (!string.IsNullOrWhiteSpace(currentPageContent))
                         {
                             var uiPage = new ReaderPageUiModel { ChapterId = targetChapter.Id, Title = targetChapter.Title };

@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using MonoRead.Core.Entities;
+using Microsoft.Maui.Graphics;
 
 namespace MonoRead.App.ViewModels
 {
@@ -25,7 +26,21 @@ namespace MonoRead.App.ViewModels
         [ObservableProperty]
         private bool _showCheckBox;
 
-        // 【新增能力】：供 ViewModel 在页面 OnAppearing 时主动唤醒刷新进度
+        // ==========================================
+        // 【新增】：云端/本地 状态徽章属性
+        // ==========================================
+        public bool IsCloudBook { get; set; }
+
+        [ObservableProperty]
+        private string _statusBadgeText = string.Empty;
+
+        [ObservableProperty]
+        private Color _badgeBackgroundColor = Colors.Transparent;
+
+        [ObservableProperty]
+        private Color _badgeTextColor = Colors.Transparent;
+
+        // 【能力】：供 ViewModel 在页面 OnAppearing 时主动唤醒刷新进度
         public void RefreshProgress()
         {
             if (OriginalEntity is Book book)

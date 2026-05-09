@@ -14,11 +14,7 @@
     <Grid>
         <Grid RowDefinitions="Auto, *, Auto">
 
-            <!-- ================= 顶部导航栏 (已解耦净化) ================= -->
-            <!-- 移除了回收站和日志，列数由 5 列缩减为 3 列 -->
             <Grid Grid.Row="0" ColumnDefinitions="*, Auto, Auto" Padding="20,15,20,10">
-
-                <!-- 标题与返回键 -->
                 <HorizontalStackLayout Grid.Column="0" VerticalOptions="Center" Spacing="10">
                     <Button Text="⬅" 
                             IsVisible="{Binding IsNotRoot}" 
@@ -35,7 +31,6 @@
                            VerticalOptions="Center" />
                 </HorizontalStackLayout>
 
-                <!-- 管理模式切换按钮 -->
                 <Button Grid.Column="1" 
                         Text="{Binding EditModeButtonText}" 
                         Command="{Binding ToggleEditModeCommand}" 
@@ -45,7 +40,6 @@
                         Padding="10,8" 
                         Margin="0,0,10,0"/>
 
-                <!-- 导入书籍按钮 -->
                 <Button Grid.Column="2" 
                         Text="+ 导入书籍" 
                         IsVisible="{Binding IsNotRoot, Converter={StaticResource InvertedBoolConverter}}"
@@ -55,7 +49,6 @@
                         CornerRadius="20" />
             </Grid>
 
-            <!-- ================= 树形混合文件列表 (保持不变) ================= -->
             <CollectionView Grid.Row="1" ItemsSource="{Binding Items}" SelectionMode="None">
                 <CollectionView.EmptyView>
                     <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16">
@@ -67,14 +60,12 @@
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
                         <Grid Padding="20,10" ColumnDefinitions="60, *, Auto">
-
                             <Grid.GestureRecognizers>
                                 <TapGestureRecognizer 
                                     Command="{Binding BindingContext.OpenItemCommand, Source={x:Reference RootPage}}" 
                                     CommandParameter="{Binding .}" />
                             </Grid.GestureRecognizers>
 
-                            <!-- UI 多态：根据 IsFolder 动态显隐 -->
                             <Border Grid.Column="0" IsVisible="{Binding IsFolder}" HeightRequest="80" WidthRequest="60" BackgroundColor="#FFF8E1" Stroke="#FFE082" StrokeThickness="1" StrokeShape="RoundRectangle 8">
                                 <Label Text="📁" VerticalOptions="Center" HorizontalOptions="Center" FontSize="32"/>
                             </Border>
@@ -84,11 +75,22 @@
                             </Border>
 
                             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Margin="15,0,0,0">
-                                <Label Text="{Binding Title}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                                <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                                    <Label Text="{Binding Title}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center"/>
+
+                                    <Border BackgroundColor="{Binding BadgeBackgroundColor}" 
+                                            IsVisible="{Binding IsFolder, Converter={StaticResource InvertedBoolConverter}}"
+                                            StrokeThickness="0" 
+                                            StrokeShape="RoundRectangle 4" 
+                                            Padding="6,2" 
+                                            VerticalOptions="Center">
+                                        <Label Text="{Binding StatusBadgeText}" FontSize="10" FontAttributes="Bold" TextColor="{Binding BadgeTextColor}" VerticalOptions="Center"/>
+                                    </Border>
+                                </HorizontalStackLayout>
+
                                 <Label Text="{Binding Subtitle}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="0,5,0,0" />
                             </VerticalStackLayout>
 
-                            <!-- 极简复选框 -->
                             <CheckBox Grid.Column="2" 
                                       VerticalOptions="Center" 
                                       IsChecked="{Binding IsSelected}" 
@@ -99,7 +101,6 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
 
-            <!-- ================= 底部高阶管理操作栏 (保持不变) ================= -->
             <Grid Grid.Row="2" Padding="20,15" BackgroundColor="#F5F5F5" IsVisible="{Binding IsEditMode}" ColumnDefinitions="*, *">
                 <Button Grid.Column="0" 
                         Text="📁 移动" 
@@ -120,7 +121,6 @@
 
         </Grid>
 
-        <!-- ================= 绝对置顶加载遮罩 (保持不变) ================= -->
         <Grid BackgroundColor="#CC000000" IsVisible="{Binding IsBusy}">
             <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="15">
                 <ActivityIndicator IsRunning="{Binding IsBusy}" Color="White" WidthRequest="50" HeightRequest="50" />
