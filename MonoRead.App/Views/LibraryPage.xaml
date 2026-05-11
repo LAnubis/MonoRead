@@ -77,15 +77,6 @@
                             <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Margin="15,0,0,0">
                                 <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
                                     <Label Text="{Binding Title}" FontSize="16" FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" VerticalOptions="Center"/>
-
-                                    <Border BackgroundColor="{Binding BadgeBackgroundColor}" 
-                                            IsVisible="{Binding IsFolder, Converter={StaticResource InvertedBoolConverter}}"
-                                            StrokeThickness="0" 
-                                            StrokeShape="RoundRectangle 4" 
-                                            Padding="6,2" 
-                                            VerticalOptions="Center">
-                                        <Label Text="{Binding StatusBadgeText}" FontSize="10" FontAttributes="Bold" TextColor="{Binding BadgeTextColor}" VerticalOptions="Center"/>
-                                    </Border>
                                 </HorizontalStackLayout>
 
                                 <Label Text="{Binding Subtitle}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="0,5,0,0" />

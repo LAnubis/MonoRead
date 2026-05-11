@@ -215,11 +215,6 @@ namespace MonoRead.App.ViewModels
             }
         }
 
-        [RelayCommand]
-        private async Task GoToBookSourceManagerAsync()
-        {
-            await Shell.Current.GoToAsync(nameof(Views.BookSourceManagementPage));
-        }
 
     }
 }

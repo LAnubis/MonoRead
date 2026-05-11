@@ -5,24 +5,17 @@
              Shell.NavBarIsVisible="False"
              Title="设置"
              BackgroundColor="#F7F7F7">
-    <!-- 更柔和的全局浅灰底色 -->
 
     <Grid RowDefinitions="Auto, *">
-
-        <!-- 顶部大标题区域 -->
         <Grid Grid.Row="0" Padding="20,50,20,15" BackgroundColor="#F7F7F7">
             <Label Text="设置" FontSize="30" FontAttributes="Bold" TextColor="#333333" VerticalOptions="Center" />
         </Grid>
 
-        <!-- 设置项列表区 -->
         <ScrollView Grid.Row="1" VerticalScrollBarVisibility="Never">
             <VerticalStackLayout Spacing="0" Padding="0,10,0,40">
 
-                <!-- ==================== 模块 1：数据统计入口 ==================== -->
                 <Label Text="阅读与成就" FontSize="13" TextColor="#999999" Margin="20,0,0,8" />
                 <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,25">
-
-                    <!-- 【核心修复】：加上 BackgroundColor="Transparent" -->
                     <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto, Auto" BackgroundColor="Transparent">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding GoToReadingStatsCommand}" />
@@ -32,10 +25,8 @@
                         <Label Grid.Column="2" Text="{Binding TotalReadDisplay}" FontSize="14" TextColor="#D1A67B" VerticalOptions="Center" Margin="0,0,10,0"/>
                         <Label Grid.Column="3" Text="〉" FontSize="14" TextColor="#CCCCCC" VerticalOptions="Center" />
                     </Grid>
-
                 </VerticalStackLayout>
 
-                <!-- ==================== 模块 2：阅读体验 ==================== -->
                 <Label Text="阅读体验" FontSize="13" TextColor="#999999" Margin="20,0,0,8" />
                 <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,25">
                     <Grid Padding="20,15" ColumnDefinitions="Auto, *, Auto">
@@ -48,26 +39,8 @@
                     </Grid>
                 </VerticalStackLayout>
 
-                <!-- ==================== 模块 3：数据与系统 ==================== -->
                 <Label Text="数据与系统" FontSize="13" TextColor="#999999" Margin="20,0,0,8" />
                 <VerticalStackLayout BackgroundColor="#FFFFFF" Margin="0,0,0,25">
-
-                    <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto" BackgroundColor="Transparent">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding GoToBookSourceManagerCommand}" />
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0" Text="🌐" FontSize="20" VerticalOptions="Center" Margin="0,0,15,0"/>
-
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
-                            <Label Text="网络书源管理" FontSize="16" TextColor="#333333" />
-                            <Label Text="配置解析规则，扩展全网搜索" FontSize="12" TextColor="#999999" />
-                        </VerticalStackLayout>
-
-                        <Label Grid.Column="2" Text="〉" FontSize="14" TextColor="#CCCCCC" VerticalOptions="Center" />
-                    </Grid>
-
-                    <BoxView HeightRequest="1" Color="#F7F7F7" Margin="55,0,0,0" />
-
                     <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto" BackgroundColor="Transparent">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding GoToTrashCommand}" />
@@ -100,7 +73,6 @@
                     </Grid>
                 </VerticalStackLayout>
 
-                <!-- ==================== 模块 4：关于 ==================== -->
                 <VerticalStackLayout BackgroundColor="#FFFFFF">
                     <Grid Padding="20,18" ColumnDefinitions="Auto, *, Auto">
                         <Grid.GestureRecognizers>
