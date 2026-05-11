@@ -85,7 +85,7 @@
                             <CheckBox Grid.Column="2" 
                                       VerticalOptions="Center" 
                                       IsChecked="{Binding IsSelected}" 
-                                      InputTransparent="True" 
+                                      InputTransparent="False" 
                                       IsVisible="{Binding ShowCheckBox}" />
                         </Grid>
                     </DataTemplate>

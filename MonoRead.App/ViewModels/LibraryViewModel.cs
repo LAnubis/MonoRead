@@ -9,6 +9,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
+using System;
 
 namespace MonoRead.App.ViewModels
 {
@@ -132,44 +133,23 @@ namespace MonoRead.App.ViewModels
                 }
             });
         }
+
         [RelayCommand]
         private async Task LoadItemsAsync()
         {
             if (IsBusy) return;
             IsBusy = true;
-
-            // 【核心修复】：确保加载书架时显示正确的文字
             BusyMessage = "正在同步您的书架...";
-
-            try
-            {
-                await RefreshItemsCoreAsync();
-            }
-            catch (Exception ex)
-            {
-                LocalLogger.LogError($"加载书架异常: {ex.Message}");
-            }
-            finally
-            {
-                IsBusy = false;
-            }
+            try { await RefreshItemsCoreAsync(); }
+            catch (Exception ex) { LocalLogger.LogError($"加载书架异常: {ex.Message}"); }
+            finally { IsBusy = false; }
         }
 
-        // =========================================================
-        // 【全新体验】：静默无感刷新，不触发全屏遮罩
-        // =========================================================
         [RelayCommand]
         private async Task SilentRefreshAsync()
         {
-            try
-            {
-                // 偷偷在后台比对并刷新数据，UI 不会出现闪烁
-                await RefreshItemsCoreAsync();
-            }
-            catch (Exception ex)
-            {
-                LocalLogger.LogError($"静默加载异常: {ex.Message}");
-            }
+            try { await RefreshItemsCoreAsync(); }
+            catch (Exception ex) { LocalLogger.LogError($"静默加载异常: {ex.Message}"); }
         }
 
         [RelayCommand]
@@ -184,17 +164,27 @@ namespace MonoRead.App.ViewModels
         {
             if (node == null) return;
 
-            // 编辑模式逻辑保持不变...
+            // ==========================================
+            // 【核心修复 1】：恢复被我误删的多选状态追踪逻辑！
+            // ==========================================
+            if (IsEditMode)
+            {
+                node.IsSelected = !node.IsSelected;
+
+                // 就是漏了下面这两行，导致删除和移动找不到目标！
+                if (node.IsSelected && !SelectedItems.Contains(node)) SelectedItems.Add(node);
+                else if (!node.IsSelected && SelectedItems.Contains(node)) SelectedItems.Remove(node);
+
+                return; // 直接拦截，绝不触发底下的黑框
+            }
 
             if (IsBusy) return;
             IsBusy = true;
-
-            // 【核心修复】：点击进入书籍时，明确设置提示词
             BusyMessage = "正在为您开启阅读体验...";
 
             try
             {
-                await Task.Delay(50); // 给 UI 渲染一点时间
+                await Task.Delay(50);
                 if (node.IsFolder && node.OriginalEntity is Folder folder)
                 {
                     CurrentFolder = folder;
@@ -206,10 +196,7 @@ namespace MonoRead.App.ViewModels
                     await Shell.Current.GoToAsync(route);
                 }
             }
-            finally
-            {
-                IsBusy = false;
-            }
+            finally { IsBusy = false; }
         }
 
         [RelayCommand]
@@ -217,7 +204,6 @@ namespace MonoRead.App.ViewModels
         {
             if (IsBusy) return;
 
-            // 彻底去除了“全网搜书”选项
             string action = await Shell.Current.DisplayActionSheetAsync(
                 "导入本地或云端书籍", "取消", null, "本地导入 (TXT)", "坚果云导入 (TXT)");
 

@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 
 namespace MonoRead.Core.Entities
 {
@@ -13,20 +12,22 @@ namespace MonoRead.Core.Entities
         public Guid? FolderId { get; set; }
         public string Title { get; set; } = string.Empty;
 
-
-        // =========================================================
-        // 【新增】：为了承接网络书源而扩展的元数据字段
-        // =========================================================
+        // 虽然砍掉了在线搜索，但导入本地 TXT 时依然可能需要这些元数据
         public string Author { get; set; } = "未知";
         public string Description { get; set; } = string.Empty;
-        public string CoverUrl { get; set; } = string.Empty; // 存储网络图片的直链
-
+        public string CoverUrl { get; set; } = string.Empty;
 
         public string FilePath { get; set; } = string.Empty;
         public string? CoverImagePath { get; set; }
         public string FileHash { get; set; } = string.Empty;
-        public string ProgressLocator { get; set; } = "{}";
         public DateTime ImportDate { get; set; }
+
+        // =========================================================
+        // 【新增】：专用于精准断点续传的强类型进度锚点
+        // (彻底删除了混乱的 ProgressLocator JSON 字符串)
+        // =========================================================
+        public Guid? LastReadChapterId { get; set; }
+        public int LastReadOffset { get; set; }
 
         public virtual Folder? Folder { get; set; }
         public virtual ICollection<BookChapter> Chapters { get; set; } = new List<BookChapter>();
@@ -67,26 +68,17 @@ namespace MonoRead.Core.Entities
                 int total = Chapters.Count;
                 int current = 1;
 
-                if (!string.IsNullOrWhiteSpace(ProgressLocator) && ProgressLocator != "{}")
+                // 【核心重构】：直接使用强类型的 LastReadChapterId，告别繁琐且易错的 JSON 解析
+                if (LastReadChapterId.HasValue)
                 {
-                    try
+                    var chapter = Chapters.FirstOrDefault(c => c.Id == LastReadChapterId.Value);
+                    if (chapter != null)
                     {
-                        using var doc = JsonDocument.Parse(ProgressLocator);
-                        if (doc.RootElement.TryGetProperty("chapterId", out var chapterIdElement))
-                        {
-                            var chapterId = chapterIdElement.GetGuid();
-                            var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
-                            if (chapter != null)
-                            {
-                                // 假设 SortOrder 是从 0 开始的索引，展示给用户时 +1
-                                current = chapter.SortOrder + 1;
-                            }
-                        }
+                        // 假设 SortOrder 是从 0 开始的索引，展示给用户时 +1
+                        current = chapter.SortOrder + 1;
                     }
-                    catch { /* JSON 破损等解析失败情况，静默回退到第一章 */ }
                 }
 
-                // 【核心修复 2】：规范化输出格式
                 return $"{current}章 / 共{total}章";
             }
         }

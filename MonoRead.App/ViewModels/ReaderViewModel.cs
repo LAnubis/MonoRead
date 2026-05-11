@@ -5,6 +5,10 @@ using MonoRead.Core.Entities;
 using MonoRead.Core.Interfaces;
 using MonoRead.Infrastructure.Logging;
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.IO;
+using System.Threading.Tasks;
+using System;
 
 namespace MonoRead.App.ViewModels
 {
@@ -26,14 +30,16 @@ namespace MonoRead.App.ViewModels
         public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
     }
 
-    public class ReaderPageUiModel
+    // 将 UiModel 升级为 ObservableObject 以防界面绑定延迟
+    public partial class ReaderPageUiModel : ObservableObject
     {
-        public Guid ChapterId { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public ObservableCollection<ParagraphUiModel> Paragraphs { get; set; } = new();
-        public string PageIndicator { get; set; } = string.Empty;
-        public bool IsTransitionPage { get; set; } = false;
-        public string NextChapterTitle { get; set; } = string.Empty;
+        [ObservableProperty] private Guid _chapterId;
+        [ObservableProperty] private string _title = string.Empty;
+        [ObservableProperty] private ObservableCollection<ParagraphUiModel> _paragraphs = new();
+        [ObservableProperty] private string _pageIndicator = string.Empty;
+        [ObservableProperty] private bool _isTransitionPage = false;
+        [ObservableProperty] private string _nextChapterTitle = string.Empty;
+        [ObservableProperty] private int _startCharIndex = 0;
     }
 
     [QueryProperty(nameof(BookIdString), "BookId")]
@@ -46,6 +52,9 @@ namespace MonoRead.App.ViewModels
 
         private static Guid _activeInstanceId = Guid.Empty;
         private readonly Guid _myInstanceId = Guid.NewGuid();
+
+        // 拦截锁，防止进入页面时 CarouselView 重置带来的进度洗白
+        private bool _isInitialLoading = true;
 
         [ObservableProperty] private bool _isLoading;
         [ObservableProperty] private bool _isLoadingNext;
@@ -195,19 +204,10 @@ namespace MonoRead.App.ViewModels
                     ChaptersList = new ObservableCollection<BookChapter>(sortedChapters);
                     var targetChapter = sortedChapters.First();
 
-                    if (!string.IsNullOrWhiteSpace(CurrentBook.ProgressLocator) && CurrentBook.ProgressLocator != "{}")
+                    if (CurrentBook.LastReadChapterId.HasValue)
                     {
-                        try
-                        {
-                            using var doc = System.Text.Json.JsonDocument.Parse(CurrentBook.ProgressLocator);
-                            if (doc.RootElement.TryGetProperty("chapterId", out var chapterIdElement))
-                            {
-                                var savedChapterId = chapterIdElement.GetGuid();
-                                var savedChapter = sortedChapters.FirstOrDefault(c => c.Id == savedChapterId);
-                                if (savedChapter != null) targetChapter = savedChapter;
-                            }
-                        }
-                        catch { }
+                        var savedChapter = sortedChapters.FirstOrDefault(c => c.Id == CurrentBook.LastReadChapterId.Value);
+                        if (savedChapter != null) targetChapter = savedChapter;
                     }
 
                     await LoadChapterIntoStreamAsync(targetChapter, clearStream: true);
@@ -216,9 +216,6 @@ namespace MonoRead.App.ViewModels
             catch (Exception ex) { LocalLogger.LogError($"书籍加载失败: {ex.Message}"); }
         }
 
-        // =========================================================================
-        // 【纯净版架构】：去掉了在线流媒体判断，完全复用你原汁原味的沙盒读取逻辑！
-        // =========================================================================
         private async Task<string> ExtractChapterContentAsync(BookChapter chapter)
         {
             if (CurrentBook == null) return string.Empty;
@@ -319,7 +316,8 @@ namespace MonoRead.App.ViewModels
         private async Task LoadChapterIntoStreamAsync(BookChapter targetChapter, bool clearStream)
         {
             if (CurrentBook == null) return;
-            if (clearStream) IsLoading = true; else IsLoadingNext = true;
+            if (clearStream) { IsLoading = true; _isInitialLoading = true; }
+            else IsLoadingNext = true;
 
             try
             {
@@ -337,97 +335,168 @@ namespace MonoRead.App.ViewModels
                 CanGoPrevious = CurrentBook.Chapters.Any(c => c.SortOrder < targetChapter.SortOrder);
                 CanGoNext = CurrentBook.Chapters.Any(c => c.SortOrder > targetChapter.SortOrder);
 
-                MainThread.BeginInvokeOnMainThread(() =>
+                int targetPage = 0;
+                var newPagedStream = new ObservableCollection<ReaderPageUiModel>();
+
+                if (IsScrollMode)
                 {
-                    if (IsScrollMode)
+                    var newReadingStream = new ObservableCollection<ReaderChapterNode>();
+                    if (!clearStream) newReadingStream = new ObservableCollection<ReaderChapterNode>(ReadingStream);
+
+                    var paragraphsUi = new List<ParagraphUiModel>();
+                    foreach (var text in rawParagraphs) paragraphsUi.Add(new ParagraphUiModel { RawText = text, FormattedText = BuildFormattedParagraph(text, chapterNotes) });
+
+                    newReadingStream.Add(new ReaderChapterNode
                     {
-                        var newReadingStream = new ObservableCollection<ReaderChapterNode>();
-                        if (!clearStream) newReadingStream = new ObservableCollection<ReaderChapterNode>(ReadingStream);
+                        ChapterId = targetChapter.Id,
+                        Title = targetChapter.Title,
+                        Content = extractedContent,
+                        Paragraphs = new ObservableCollection<ParagraphUiModel>(paragraphsUi)
+                    });
 
-                        var paragraphsUi = new List<ParagraphUiModel>();
-                        foreach (var text in rawParagraphs) paragraphsUi.Add(new ParagraphUiModel { RawText = text, FormattedText = BuildFormattedParagraph(text, chapterNotes) });
+                    MainThread.BeginInvokeOnMainThread(() => { ReadingStream = newReadingStream; });
+                }
+                else
+                {
+                    double fontRatio = 18.0 / ReaderFontSize;
+                    int charsPerLine = (int)Math.Max(10, 20 * fontRatio);
+                    double maxLinesPerPage = Math.Max(15, 29 * fontRatio);
 
-                        newReadingStream.Add(new ReaderChapterNode
+                    string currentPageContent = "";
+                    double currentPageLines = 0;
+                    int currentTotalCharCount = 0;
+                    int currentPageStartIndex = 0;
+
+                    foreach (var p in rawParagraphs)
+                    {
+                        int paragraphLines = (int)Math.Ceiling((double)p.Length / charsPerLine);
+                        double totalParagraphCost = paragraphLines + 0.8;
+
+                        if (currentPageLines + totalParagraphCost > maxLinesPerPage && currentPageLines > 0)
                         {
-                            ChapterId = targetChapter.Id,
-                            Title = targetChapter.Title,
-                            Content = extractedContent,
-                            Paragraphs = new ObservableCollection<ParagraphUiModel>(paragraphsUi)
-                        });
+                            newPagedStream.Add(new ReaderPageUiModel
+                            {
+                                ChapterId = targetChapter.Id,
+                                Title = targetChapter.Title,
+                                StartCharIndex = currentPageStartIndex,
+                                Paragraphs = new ObservableCollection<ParagraphUiModel>(
+                                    currentPageContent.TrimEnd('\n').Split('\n').Select(prp => new ParagraphUiModel { RawText = prp, FormattedText = BuildFormattedParagraph(prp, chapterNotes) })
+                                )
+                            });
 
-                        ReadingStream = newReadingStream;
+                            currentPageContent = p + "\n";
+                            currentPageLines = totalParagraphCost;
+                            currentPageStartIndex = currentTotalCharCount;
+                        }
+                        else
+                        {
+                            currentPageContent += p + "\n";
+                            currentPageLines += totalParagraphCost;
+                        }
+                        currentTotalCharCount += p.Length + 1;
                     }
-                    else
+
+                    if (!string.IsNullOrWhiteSpace(currentPageContent))
                     {
-                        var newPagedStream = new ObservableCollection<ReaderPageUiModel>();
-                        double fontRatio = 18.0 / ReaderFontSize;
-                        int charsPerLine = (int)Math.Max(10, 20 * fontRatio);
-                        double maxLinesPerPage = Math.Max(15, 29 * fontRatio);
-
-                        string currentPageContent = "";
-                        double currentPageLines = 0;
-                        int pageIndex = 1;
-
-                        foreach (var p in rawParagraphs)
-                        {
-                            int paragraphLines = (int)Math.Ceiling((double)p.Length / charsPerLine);
-                            double totalParagraphCost = paragraphLines + 0.8;
-
-                            if (currentPageLines + totalParagraphCost > maxLinesPerPage && currentPageLines > 0)
-                            {
-                                var uiPage = new ReaderPageUiModel { ChapterId = targetChapter.Id, Title = targetChapter.Title };
-                                foreach (var prp in currentPageContent.TrimEnd('\n').Split('\n'))
-                                    uiPage.Paragraphs.Add(new ParagraphUiModel { RawText = prp, FormattedText = BuildFormattedParagraph(prp, chapterNotes) });
-                                newPagedStream.Add(uiPage);
-
-                                currentPageContent = p + "\n";
-                                currentPageLines = totalParagraphCost;
-                                pageIndex++;
-                            }
-                            else
-                            {
-                                currentPageContent += p + "\n";
-                                currentPageLines += totalParagraphCost;
-                            }
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(currentPageContent))
-                        {
-                            var uiPage = new ReaderPageUiModel { ChapterId = targetChapter.Id, Title = targetChapter.Title };
-                            foreach (var prp in currentPageContent.TrimEnd('\n').Split('\n'))
-                                uiPage.Paragraphs.Add(new ParagraphUiModel { RawText = prp, FormattedText = BuildFormattedParagraph(prp, chapterNotes) });
-                            newPagedStream.Add(uiPage);
-                        }
-
-                        int totalPages = newPagedStream.Count;
-                        for (int i = 0; i < totalPages; i++)
-                        {
-                            newPagedStream[i].PageIndicator = $"{i + 1} / {totalPages}";
-                        }
-
-                        var nextChap = CurrentBook.Chapters.Where(c => c.SortOrder > targetChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
                         newPagedStream.Add(new ReaderPageUiModel
                         {
                             ChapterId = targetChapter.Id,
                             Title = targetChapter.Title,
-                            IsTransitionPage = true,
-                            NextChapterTitle = nextChap?.Title ?? string.Empty,
-                            PageIndicator = "本章完"
+                            StartCharIndex = currentPageStartIndex,
+                            Paragraphs = new ObservableCollection<ParagraphUiModel>(
+                                currentPageContent.TrimEnd('\n').Split('\n').Select(prp => new ParagraphUiModel { RawText = prp, FormattedText = BuildFormattedParagraph(prp, chapterNotes) })
+                            )
                         });
-
-                        PagedStream = newPagedStream;
-                        CurrentCarouselPosition = 0;
                     }
 
-                    _lastLoadedSortOrder = targetChapter.SortOrder;
-                });
+                    int totalPages = newPagedStream.Count;
+                    for (int i = 0; i < totalPages; i++) newPagedStream[i].PageIndicator = $"{i + 1} / {totalPages}";
 
-                CurrentBook.ProgressLocator = $"{{\"chapterId\": \"{targetChapter.Id}\"}}";
-                await _bookRepository.UpdateBookProgressAsync(CurrentBook.Id, CurrentBook.ProgressLocator);
-                if (!clearStream) await Task.Delay(300);
+                    // ==========================================================
+                    // 【核心缝合】：恢复被我误删的“本章完”以及下一章按钮过渡页！
+                    // ==========================================================
+                    var nextChap = CurrentBook.Chapters.Where(c => c.SortOrder > targetChapter.SortOrder).OrderBy(c => c.SortOrder).FirstOrDefault();
+                    newPagedStream.Add(new ReaderPageUiModel
+                    {
+                        ChapterId = targetChapter.Id,
+                        Title = targetChapter.Title,
+                        IsTransitionPage = true,
+                        NextChapterTitle = nextChap?.Title ?? string.Empty,
+                        PageIndicator = "本章完",
+                        StartCharIndex = currentTotalCharCount
+                    });
+                    // ==========================================================
+
+                    if (clearStream && CurrentBook.LastReadChapterId == targetChapter.Id && CurrentBook.LastReadOffset > 0)
+                    {
+                        for (int i = 0; i < newPagedStream.Count; i++)
+                        {
+                            if (newPagedStream[i].StartCharIndex <= CurrentBook.LastReadOffset) targetPage = i;
+                            else break;
+                        }
+                    }
+                    else if (clearStream)
+                    {
+                        CurrentBook.LastReadOffset = 0;
+                    }
+
+                    MainThread.BeginInvokeOnMainThread(async () =>
+                    {
+                        PagedStream = newPagedStream;
+                        _lastLoadedSortOrder = targetChapter.SortOrder;
+
+                        if (clearStream)
+                        {
+                            await Task.Delay(300);
+                            CurrentCarouselPosition = targetPage;
+                            _isInitialLoading = false;
+                        }
+                    });
+                }
+
+                if (clearStream)
+                {
+                    CurrentBook.LastReadChapterId = targetChapter.Id;
+                    await _bookRepository.UpdateAsync(CurrentBook);
+                }
             }
-            catch (Exception ex) { LocalLogger.LogError($"加载章节失败: {ex.Message}"); }
-            finally { if (clearStream) IsLoading = false; else IsLoadingNext = false; }
+            catch (Exception ex) { LocalLogger.LogError($"阅读器加载失败: {ex.Message}"); }
+            finally { IsLoading = false; IsLoadingNext = false; }
+        }
+
+        public async Task SaveCurrentProgressAsync()
+        {
+            if (_isInitialLoading || IsLoading || CurrentBook == null || PagedStream == null || !PagedStream.Any()) return;
+
+            try
+            {
+                int currentOffset = 0;
+                Guid currentChapterId = CurrentChapter?.Id ?? Guid.Empty;
+
+                if (!IsScrollMode && CurrentCarouselPosition >= 0 && CurrentCarouselPosition < PagedStream.Count)
+                {
+                    var currentPage = PagedStream[CurrentCarouselPosition];
+                    currentOffset = currentPage.StartCharIndex;
+                    currentChapterId = currentPage.ChapterId;
+                }
+                else if (CurrentChapter != null)
+                {
+                    currentChapterId = CurrentChapter.Id;
+                    currentOffset = CurrentBook.LastReadOffset;
+                }
+
+                if (currentChapterId != Guid.Empty)
+                {
+                    CurrentBook.LastReadChapterId = currentChapterId;
+                    CurrentBook.LastReadOffset = currentOffset;
+
+                    await _bookRepository.UpdateAsync(CurrentBook);
+                }
+            }
+            catch (Exception ex)
+            {
+                LocalLogger.LogError($"进度保存静默异常: {ex.Message}");
+            }
         }
 
         private async Task RefreshHighlightingAsync()
@@ -532,6 +601,8 @@ namespace MonoRead.App.ViewModels
 
             var duration = (int)(DateTime.UtcNow - _sessionStartTime).TotalSeconds;
             if (duration > 10) await _recordRepository.AddDurationAsync(DateTime.UtcNow, duration);
+
+            await SaveCurrentProgressAsync();
             await Shell.Current.GoToAsync("..");
         }
 

@@ -41,7 +41,6 @@ namespace MonoRead.Infrastructure.services
             var book = await _context.Books.FindAsync(bookId);
             if (book != null)
             {
-                book.ProgressLocator = locator;
                 await _context.SaveChangesAsync();
             }
         }

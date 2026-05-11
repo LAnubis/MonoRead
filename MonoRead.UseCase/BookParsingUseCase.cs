@@ -29,8 +29,7 @@ namespace MonoRead.UseCase
                 Title = Path.GetFileNameWithoutExtension(fileName),
                 FileHash = fileHash,
                 FilePath = sandboxFilePath,
-                CoverImagePath = "default_cover.png",
-                ProgressLocator = "{}"
+                CoverImagePath = "default_cover.png"
             };
 
             var chapters = new List<BookChapter>();
