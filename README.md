@@ -22,7 +22,9 @@ MonoRead 是一款基于 .NET MAUI 构建的现代化跨平台阅读引擎，致
 - 📊 阅读热力图”与阅读历程统计。
 - 🛡️ 采用社区标准的 `CommunityToolkit.Mvvm`、SQLite 离线存储与 Entity Framework Core，完美兼容 .NET 10 Native AOT 规范。
 
-还有bug的存在，有需要的可以同步完代码debug下
+备注：
+1、有bug的存在，有需要的可以同步完代码debug下
+2、只有安卓的还算稳定，bug也有，但是应该不会太多，windows的应该也还可以，ios和mac的暂时还没调试过
 
 ## 📸 屏幕截图 (Screenshots)
 
