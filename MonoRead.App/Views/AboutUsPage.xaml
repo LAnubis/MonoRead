@@ -34,7 +34,7 @@
 
             <!-- 产品信息 -->
             <Label Text="FableReader" FontSize="26" FontAttributes="Bold" TextColor="#333333" HorizontalOptions="Center" Margin="0,0,0,5" />
-            <Label Text="Version 2.2.1" FontSize="13" FontFamily="Arial" TextColor="#A0A0A0" HorizontalOptions="Center" Margin="0,0,0,40"/>
+            <Label Text="Version 2.3.1" FontSize="13" FontFamily="Arial" TextColor="#A0A0A0" HorizontalOptions="Center" Margin="0,0,0,40"/>
 
             <!-- 开发者宣言 -->
             <VerticalStackLayout Spacing="8" Margin="30,0">
